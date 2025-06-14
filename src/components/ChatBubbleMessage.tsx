@@ -9,6 +9,7 @@ interface BubbleProps {
 }
 const ChatBubbleMessage: React.FC<BubbleProps> = ({ message }) => {
   const isUser = message.role === "user";
+
   return (
     <div className={`w-full flex ${isUser ? "justify-end" : "justify-start"} mb-2`}>
       <div
@@ -30,9 +31,25 @@ const ChatBubbleMessage: React.FC<BubbleProps> = ({ message }) => {
         </div>
         <ReactMarkdown
           components={{
+            h1: ({node, ...props}) => <h1 className="text-lg font-semibold mt-2 mb-2" {...props} />,
+            h2: ({node, ...props}) => <h2 className="text-base font-semibold mt-4 mb-2" {...props} />,
+            h3: ({node, ...props}) => <h3 className="font-semibold mt-4 mb-2" {...props} />,
+            ul: ({node, ...props}) => <ul className="list-disc ml-6 my-2 space-y-1" {...props} />,
+            ol: ({node, ...props}) => <ol className="list-decimal ml-6 my-2 space-y-1" {...props} />,
+            li: ({node, ...props}) => <li className="mb-1" {...props} />,
+            p: ({node, ...props}) => <p className="mb-3 leading-relaxed" {...props} />,
             strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
             em: ({node, ...props}) => <em className="italic text-gray-700" {...props} />,
-            li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+            blockquote: ({node, ...props}) => (
+              <blockquote className="border-l-4 border-opobot-blue pl-3 text-gray-700 italic my-3" {...props} />
+            ),
+            pre: ({node, ...props}) => (
+              <pre className="bg-gray-100 rounded p-2 my-2 text-sm overflow-x-auto" {...props} />
+            ),
+            code: ({node, ...props}) => (
+              <code className="bg-gray-100 rounded px-1 py-0.5 text-xs font-mono" {...props} />
+            ),
+            // fallback: any other markdown syntax
           }}
         >
           {message.content}
@@ -43,3 +60,4 @@ const ChatBubbleMessage: React.FC<BubbleProps> = ({ message }) => {
 };
 
 export default ChatBubbleMessage;
+
