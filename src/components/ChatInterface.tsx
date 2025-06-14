@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
@@ -95,8 +94,6 @@ const ChatInterface = () => {
               onKeyDown={handleInputKeyDown}
               placeholder="Escribe tu mensaje…"
               rows={1}
-              minRows={1}
-              maxRows={8}
               className="resize-none flex-1 min-h-[44px] max-h-44 text-base px-4 py-3 pr-10 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
               disabled={isLoading}
               autoFocus
