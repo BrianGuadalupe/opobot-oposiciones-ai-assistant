@@ -1,6 +1,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import type { Json } from "@/integrations/supabase/types";
 
 export interface TestResultDetail {
   questions: {
@@ -26,15 +27,14 @@ export const useTestResults = () => {
   }) => {
     if (!session) return;
     const userId = session.user.id;
-    const { error } = await supabase.from("test_results").insert([
-      {
-        user_id: userId,
-        score,
-        total_questions,
-        topic,
-        detail,
-      },
-    ]);
+    const payload = {
+      user_id: userId,
+      score,
+      total_questions,
+      topic,
+      detail: detail ? (JSON.parse(JSON.stringify(detail)) as Json) : null,
+    };
+    const { error } = await supabase.from("test_results").insert([payload]);
     if (error) {
       console.error("Error guardando resultado del test:", error);
       throw error;
