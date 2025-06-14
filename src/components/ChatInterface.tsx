@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Send, Bot, User, Trash2 } from 'lucide-react';
 import { useChat, ChatMessage } from '@/hooks/useChat';
+import ReactMarkdown from 'react-markdown';
 
 const ChatInterface = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -163,9 +164,10 @@ const ChatInterface = () => {
   );
 };
 
+// ChatMessageComponent AHORA renderiza usando ReactMarkdown:
 const ChatMessageComponent: React.FC<{ message: ChatMessage }> = ({ message }) => {
   const isUser = message.role === 'user';
-  
+
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <Card className={`max-w-2xl shadow-sm ${isUser ? 'bg-opobot-blue text-white' : 'bg-white'}`}>
@@ -181,14 +183,17 @@ const ChatMessageComponent: React.FC<{ message: ChatMessage }> = ({ message }) =
               )}
             </div>
             <div className="flex-1">
-              <p className={`text-sm leading-relaxed ${isUser ? 'text-white' : 'text-gray-800'}`}>
-                {message.content.split('\n').map((line, index) => (
-                  <span key={index}>
-                    {line}
-                    {index < message.content.split('\n').length - 1 && <br />}
-                  </span>
-                ))}
-              </p>
+              <div className={`text-sm leading-relaxed ${isUser ? 'text-white' : 'text-gray-800'}`}>
+                <ReactMarkdown
+                  components={{
+                    strong: ({node, ...props}) => <strong className={isUser ? "text-white font-bold" : "font-bold text-gray-900"} {...props} />,
+                    em: ({node, ...props}) => <em className={isUser ? "text-white/80 italic" : "italic text-gray-700"} {...props} />,
+                    li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+                  }}
+                >
+                  {message.content}
+                </ReactMarkdown>
+              </div>
               <p className={`text-xs mt-2 ${isUser ? 'text-white/70' : 'text-gray-500'}`}>
                 {message.timestamp.toLocaleTimeString()}
               </p>
