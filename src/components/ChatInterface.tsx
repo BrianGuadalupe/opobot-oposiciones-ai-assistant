@@ -1,207 +1,135 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Send, Bot, User, Trash2 } from 'lucide-react';
-import { useChat, ChatMessage } from '@/hooks/useChat';
-import ReactMarkdown from 'react-markdown';
+import { Send } from 'lucide-react';
+import { useChat } from '@/hooks/useChat';
+import { Textarea } from "@/components/ui/textarea";
+import ChatBubbleMessage from './ChatBubbleMessage';
+import ChatAIThinking from './ChatAIThinking';
 
 const ChatInterface = () => {
   const [inputMessage, setInputMessage] = useState('');
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const { messages, sendMessage, clearMessages, isLoading } = useChat();
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollableContainer = useRef<HTMLDivElement>(null);
 
-  // Auto-grow textarea
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Auto-scroll as ChatGPT: scroll to bottom on new messages
   useEffect(() => {
-    if (inputRef.current) {
-      inputRef.current.style.height = "auto";
-      inputRef.current.style.height = (inputRef.current.scrollHeight) + "px";
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (scrollableContainer.current) {
+      const { scrollHeight, clientHeight, scrollTop } = scrollableContainer.current;
+      setShowScrollToBottom(scrollHeight - (scrollTop + clientHeight) > 150);
     }
-  }, [inputMessage, isLoading]);
+  }, [messages, isLoading]);
 
-  // Scroll siempre abajo en cada nuevo mensaje 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Handler for auto-grow textarea and Enter/Shift+Enter
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit();
+    }
   };
 
-  useEffect(() => { scrollToBottom(); }, [messages, isLoading]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Enviar mensaje
+  const handleSubmit = async () => {
     if (!inputMessage.trim() || isLoading) return;
     await sendMessage(inputMessage);
     setInputMessage('');
-    if (inputRef.current) inputRef.current.style.height = "auto";
   };
 
-  // Abrir/ejecutar comando rápido
-  const handleSpecialCommand = async (command: string) => {
-    if (isLoading) return;
-    await sendMessage(command);
-    setInputMessage('');
+  // Scroll button
+  const handleScroll = () => {
+    if (!scrollableContainer.current) return;
+    const { scrollHeight, clientHeight, scrollTop } = scrollableContainer.current;
+    setShowScrollToBottom(scrollHeight - (scrollTop + clientHeight) > 150);
   };
 
   return (
-    <div className="flex flex-col h-[80vh] max-h-[650px] mx-auto w-full max-w-2xl bg-[#e7eaf3] rounded-2xl shadow-md border border-gray-200">
-      {/* Header minimalista */}
-      <div className="px-6 py-4 flex items-center justify-between border-b border-gray-200 bg-[#f8fafc] rounded-t-2xl">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 bg-gradient-to-br from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center">
-            <Bot className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-gray-800 leading-tight">Opobot Assistant</h2>
-            <p className="text-xs text-gray-500">Especialista en oposiciones</p>
-          </div>
-        </div>
-        {messages.length > 0 &&
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={clearMessages}
-            title="Limpiar conversación"
-            className="text-gray-400 hover:bg-gray-100"
-            >
-            <Trash2 className="w-5 h-5" />
-          </Button>
-        }
-      </div>
-      {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto px-2 py-4 space-y-2 bg-[#e7eaf3] transition-all">
-        {messages.length === 0 ? (
-          <div className="h-full flex flex-col justify-center items-center text-center pt-10 animate-fade-in">
-            <Bot className="w-14 h-14 text-gray-300 mb-3" />
-            <h3 className="text-base font-semibold text-gray-700 mb-1">¡Hola! Soy Opobot</h3>
-            <p className="text-xs text-gray-500 mb-4">
-              Estoy aquí para ayudarte con tus estudios de oposiciones.<br />
-              Pregúntame sobre legislación, temarios o técnicas de estudio.
-            </p>
-            <div className="bg-white p-4 rounded-lg shadow-sm text-left w-full max-w-xs text-[13px] border">
-              <span className="mb-2 text-gray-700 block">💡 Ejemplos:</span>
-              <ul className="space-y-1 text-gray-600">
-                <li>– ¿Cuáles son los requisitos para ser Auxiliar?</li>
-                <li>– Explícame el artículo 14 de la Constitución.</li>
-                <li>– ¿Cómo funciona el proceso de recurso administrativo?</li>
+    <div className="flex-1 flex flex-col h-screen w-full relative">
+      {/* Bloque de mensajes */}
+      <div
+        ref={scrollableContainer}
+        className="flex-1 overflow-y-auto pt-8 pb-36 px-2 sm:px-0 sm:max-w-2xl mx-auto w-full"
+        style={{ background: "#f7f7fb" }}
+        onScroll={handleScroll}
+      >
+        {messages.length === 0 && !isLoading ? (
+          <div className="h-full flex flex-col justify-center items-center text-center text-gray-400 select-none">
+            <span className="text-4xl mb-2">💬</span>
+            <h2 className="font-semibold text-gray-900 text-lg mb-2">Comienza tu conversación</h2>
+            <p className="text-[15px] text-gray-500 mb-6">Hazle cualquier pregunta<br />sobre oposiciones o legislación.</p>
+            <div className="bg-white p-4 rounded-lg w-full max-w-xs text-sm border text-gray-700">
+              <span className="mb-2 block">Ejemplos:</span>
+              <ul className="space-y-1 list-disc list-inside text-gray-600 text-left">
+                <li>¿Cuáles son los requisitos para ser funcionario?</li>
+                <li>Explícame el artículo 14 de la Constitución.</li>
+                <li>¿Cómo preparo un recurso administrativo?</li>
               </ul>
             </div>
           </div>
         ) : (
-          <div className="flex flex-col gap-2">
-            {messages.map((message, idx) => (
-              <FadeIn key={message.id}>
-                <BubbleMessage message={message} />
-              </FadeIn>
+          <div className="w-full flex flex-col">
+            {messages.map((message) => (
+              <ChatBubbleMessage key={message.id} message={message} />
             ))}
-            {isLoading && (
-              <FadeIn>
-                <BubbleAIThinking />
-              </FadeIn>
-            )}
+            {isLoading && <ChatAIThinking />}
             <div ref={messagesEndRef} />
           </div>
         )}
       </div>
-      {/* Barra inferior con comandos rápidos + input */}
-      <div className="p-4 bg-[#f8fafc] border-t border-gray-200 rounded-b-2xl">
-        {/* Comandos rápidos solo si hay mensajes o input */}
-        {(messages.length > 0 || !!inputMessage.trim()) && (
-          <div className="flex gap-2 mb-4">
-            <Button
-              variant="secondary"
-              size="sm"
-              className="px-3 py-1"
-              onClick={() => handleSpecialCommand('Hazme un test de este tema')}
-              disabled={isLoading}
-            >
-              <span role="img" aria-label="Test">📝</span> Test
-            </Button>
-            <Button
-              variant="secondary"
-              size="sm"
-              className="px-3 py-1"
-              onClick={() => handleSpecialCommand('Resúmeme este tema')}
-              disabled={isLoading}
-            >
-              <span role="img" aria-label="Resumen">📄</span> Resumen
-            </Button>
-          </div>
-        )}
-        <form onSubmit={handleSubmit} className="relative flex items-end gap-2">
-          <Textarea
-            ref={inputRef}
-            value={inputMessage}
-            onChange={e => setInputMessage(e.target.value)}
-            placeholder="Escribe tu pregunta…"
-            rows={1}
-            className="resize-none min-h-[44px] max-h-36 pr-10 bg-white border border-gray-300 shadow-inner placeholder:text-gray-400 transition-all"
-            disabled={isLoading}
-            autoFocus
-            spellCheck
-          />
-          <Button
-            type="submit"
-            disabled={!inputMessage.trim() || isLoading}
-            className="absolute bottom-2 right-2 px-2 py-1 rounded shadow-none bg-opobot-blue hover:bg-opobot-blue-dark text-white"
-            size="icon"
+      {/* Fix caja de texto abajo (pantalla completa) */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#f7f7fb]/95 backdrop-blur flex justify-center py-5 px-2 border-t border-gray-100 z-30">
+        {/* Espacio reservado para futuras acciones, ejemplo: regenerar, copiar */}
+        <div className="w-full sm:max-w-2xl mx-auto flex gap-2 items-end">
+          {/* FUTURE: <Button title="Regenerar"><ReplayIcon /></Button> */}
+          <form
+            onSubmit={e => { e.preventDefault(); handleSubmit(); }}
+            className="flex w-full gap-1"
+            autoComplete="off"
           >
-            <Send className="w-4 h-4" />
-          </Button>
-        </form>
-      </div>
-    </div>
-  );
-};
-
-const FadeIn: React.FC<{children: React.ReactNode}> = ({ children }) => (
-  <div className="animate-fade-in">{children}</div>
-);
-
-// Mensaje burbuja estilo chatgpt
-const BubbleMessage: React.FC<{ message: ChatMessage }> = ({ message }) => {
-  const isUser = message.role === 'user';
-  return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
-      <div className={`
-        max-w-[85%] md:max-w-[70%] p-3 rounded-xl text-sm leading-relaxed
-        ${isUser
-          ? 'ml-auto bg-opobot-blue text-white rounded-br-md shadow'
-          : 'mr-auto bg-white text-gray-900 border border-gray-200 rounded-bl-md shadow-sm'}
-      `}>
-        <div className="flex items-center gap-2 mb-1">
-          <span className={`w-6 h-6 rounded-full flex items-center justify-center bg-white/30 ${isUser ? 'order-2' : 'order-1 bg-gradient-to-br from-opobot-blue to-opobot-green'}`}>
-            {isUser
-              ? <User className="w-4 h-4 text-opobot-blue" />
-              : <Bot className="w-4 h-4 text-white" />}
-          </span>
-          <span className="text-xs text-gray-400 font-mono">{message.timestamp.toLocaleTimeString()}</span>
+            <Textarea
+              value={inputMessage}
+              onChange={e => setInputMessage(e.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Escribe tu mensaje…"
+              rows={1}
+              minRows={1}
+              maxRows={8}
+              className="resize-none flex-1 min-h-[44px] max-h-44 text-base px-4 py-3 pr-10 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
+              disabled={isLoading}
+              autoFocus
+              spellCheck
+              tabIndex={0}
+              aria-label="Escribe tu mensaje"
+            />
+            <Button
+              type="submit"
+              disabled={!inputMessage.trim() || isLoading}
+              size="icon"
+              className="absolute right-8 bottom-8 bg-opobot-blue text-white rounded-lg shadow-none transition hover:bg-opobot-blue-dark focus-visible:outline"
+              aria-label="Enviar"
+              tabIndex={0}
+            >
+              <Send className="w-5 h-5" />
+            </Button>
+          </form>
         </div>
-        <ReactMarkdown
-          components={{
-            strong: ({node, ...props}) => <strong className="font-bold" {...props} />,
-            em: ({node, ...props}) => <em className="italic text-gray-700" {...props} />,
-            li: ({node, ...props}) => <li className="ml-4 list-disc" {...props} />
+      </div>
+      {/* Scroll to bottom button - solo visible si el usuario hace scroll arriba */}
+      {showScrollToBottom &&
+        <button
+          className="fixed right-5 bottom-28 z-50 bg-white/90 backdrop-blur border border-gray-200 rounded-full shadow p-2 hover:scale-105 transition"
+          onClick={() => {
+            scrollableContainer.current?.scrollTo({ top: scrollableContainer.current.scrollHeight, behavior: "smooth" });
           }}
         >
-          {message.content}
-        </ReactMarkdown>
-      </div>
+          <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 14.1V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4.9m7-2.7V5m0 0-4 4m4-4 4 4"/></svg>
+        </button>
+      }
     </div>
   );
 };
-
-const BubbleAIThinking = () => (
-  <div className="flex justify-start">
-    <div className="max-w-[70%] bg-white text-gray-800 border border-gray-200 rounded-xl p-3 shadow-sm flex items-center gap-2">
-      <Bot className="w-5 h-5 text-opobot-blue animate-bounce" />
-      <span className="flex space-x-1">
-        <span className="w-2 h-2 bg-opobot-blue rounded-full animate-bounce" />
-        <span className="w-2 h-2 bg-opobot-blue rounded-full animate-bounce" style={{ animationDelay: '0.1s' }} />
-        <span className="w-2 h-2 bg-opobot-blue rounded-full animate-bounce" style={{ animationDelay: '0.2s' }} />
-      </span>
-      <span className="text-xs text-gray-400 ml-2">Pensando…</span>
-    </div>
-  </div>
-);
 
 export default ChatInterface;
