@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +35,13 @@ const ChatInterface = () => {
     ));
   };
 
+  // Nueva función para enviar comandos predefinidos
+  const handleSpecialCommand = async (command: string) => {
+    if (isLoading) return;
+    await sendMessage(command);
+    setInputMessage('');
+  };
+
   return (
     <div className="max-w-4xl mx-auto h-[calc(100vh-200px)] flex flex-col">
       {/* Header */}
@@ -61,6 +67,29 @@ const ChatInterface = () => {
               <span>Limpiar</span>
             </Button>
           )}
+        </div>
+        {/* Botones de acción rápida */}
+        <div className="flex gap-2 mt-4 justify-center">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => handleSpecialCommand('Hazme un test de este tema')}
+            disabled={isLoading}
+          >
+            <span role="img" aria-label="Test">📝</span>
+            Hazme un test
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="flex items-center gap-2"
+            onClick={() => handleSpecialCommand('Resúmeme este tema')}
+            disabled={isLoading}
+          >
+            <span role="img" aria-label="Resumen">📄</span>
+            Resúmeme este tema
+          </Button>
         </div>
       </div>
 
