@@ -9,6 +9,33 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      frequent_questions: {
+        Row: {
+          context: string | null
+          created_at: string
+          id: string
+          question: string
+          times_asked: number | null
+          user_id: string
+        }
+        Insert: {
+          context?: string | null
+          created_at?: string
+          id?: string
+          question: string
+          times_asked?: number | null
+          user_id: string
+        }
+        Update: {
+          context?: string | null
+          created_at?: string
+          id?: string
+          question?: string
+          times_asked?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -30,6 +57,36 @@ export type Database = {
           full_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      test_results: {
+        Row: {
+          created_at: string
+          detail: Json | null
+          id: string
+          score: number
+          topic: string | null
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          score: number
+          topic?: string | null
+          total_questions: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          detail?: Json | null
+          id?: string
+          score?: number
+          topic?: string | null
+          total_questions?: number
+          user_id?: string
         }
         Relationships: []
       }

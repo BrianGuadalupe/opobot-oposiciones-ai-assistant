@@ -1,8 +1,8 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useFrequentQuestions } from './useFrequentQuestions';
 
 export interface ChatMessage {
   id: string;
@@ -16,6 +16,7 @@ export const useChat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { session } = useAuth();
   const { toast } = useToast();
+  const { registerQuestion } = useFrequentQuestions();
 
   const sendMessage = async (content: string) => {
     if (!session) {
@@ -28,19 +29,19 @@ export const useChat = () => {
     }
 
     setIsLoading(true);
-    
-    // Add user message immediately
+
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
       role: 'user',
       content,
       timestamp: new Date(),
     };
-    
+
     setMessages(prev => [...prev, userMessage]);
 
     try {
-      // Prepare conversation history for OpenAI
+      registerQuestion(content);
+
       const conversationHistory = messages.map(msg => ({
         role: msg.role,
         content: msg.content
@@ -64,7 +65,6 @@ export const useChat = () => {
         throw new Error(data.error || 'Error desconocido');
       }
 
-      // Add assistant response
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
@@ -82,7 +82,6 @@ export const useChat = () => {
         variant: "destructive",
       });
 
-      // Remove the user message on error
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setIsLoading(false);
