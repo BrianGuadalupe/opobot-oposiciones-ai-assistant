@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star } from "lucide-react";
@@ -106,17 +105,23 @@ const Pricing = () => {
                     </li>
                   ))}
                 </ul>
-
-                <Button 
-                  className={`w-full rounded-lg text-base shadow-sm ${
-                    plan.popular 
-                      ? 'bg-opobot-blue hover:bg-opobot-blue-dark' 
-                      : 'bg-gray-900 hover:bg-gray-800'
-                  }`}
-                  size="lg"
-                >
-                  {plan.name === 'Academias' ? 'Contactar' : 'Comenzar Gratis'}
-                </Button>
+                {plan.name === 'Academias' ? (
+                  <Button 
+                    className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
+                    size="lg"
+                  >
+                    Contactar
+                  </Button>
+                ) : (
+                  <a href="/auth?mode=register" tabIndex={-1} className="block">
+                    <Button 
+                      className="w-full rounded-lg text-base shadow-sm bg-gray-900 hover:bg-gray-800"
+                      size="lg"
+                    >
+                      Comenzar Gratis
+                    </Button>
+                  </a>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -136,4 +141,3 @@ const Pricing = () => {
 };
 
 export default Pricing;
-

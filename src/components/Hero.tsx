@@ -25,12 +25,14 @@ const Hero = () => {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-9 animate-scale-in">
-            <Button 
-              size="lg" 
-              className="bg-opobot-blue hover:bg-opobot-blue-dark text-lg px-8 py-4 rounded-xl shadow hover:scale-105 transition-transform focus-visible:ring-2"
-            >
-              Probar Gratis 7 Días
-            </Button>
+            <a href="/auth?mode=register" tabIndex={-1}>
+              <Button 
+                size="lg" 
+                className="bg-opobot-blue hover:bg-opobot-blue-dark text-lg px-8 py-4 rounded-xl shadow hover:scale-105 transition-transform focus-visible:ring-2"
+              >
+                Probar Gratis 7 Días
+              </Button>
+            </a>
             <Button 
               variant="outline" 
               size="lg"
@@ -72,3 +74,4 @@ const Hero = () => {
 };
 
 export default Hero;
+

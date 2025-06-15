@@ -1,14 +1,17 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const location = useLocation();
+  const urlParams = new URLSearchParams(location.search);
+  const queryMode = urlParams.get("mode");
+
+  const [isLogin, setIsLogin] = useState(queryMode !== "register");
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
@@ -16,6 +19,11 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Cambia el modo de login/register en función del parámetro cada vez que cambia la URL
+    setIsLogin(queryMode !== "register");
+  }, [queryMode]);
 
   useEffect(() => {
     if (user) {
@@ -120,7 +128,20 @@ const Auth = () => {
 
         <div className="mt-6 text-center">
           <button
-            onClick={() => setIsLogin(!isLogin)}
+            onClick={() => {
+              setIsLogin(!isLogin);
+              // Cambia la URL para reflejar el modo al cambiar manualmente
+              const params = new URLSearchParams(location.search);
+              if (isLogin) {
+                params.set('mode', 'register');
+              } else {
+                params.delete('mode');
+              }
+              navigate({
+                pathname: location.pathname,
+                search: params.toString(),
+              }, { replace: true });
+            }}
             className="text-opobot-blue hover:underline"
           >
             {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
