@@ -114,17 +114,6 @@ const ChatInterface = () => {
           </form>
         </div>
       </div>
-      {/* Scroll to bottom button - solo visible si el usuario hace scroll arriba */}
-      {showScrollToBottom &&
-        <button
-          className="fixed right-5 bottom-28 z-50 bg-white/90 backdrop-blur border border-gray-200 rounded-full shadow p-2 hover:scale-105 transition"
-          onClick={() => {
-            scrollableContainer.current?.scrollTo({ top: scrollableContainer.current.scrollHeight, behavior: "smooth" });
-          }}
-        >
-          <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path stroke="#2563eb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M19 14.1V19a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-4.9m7-2.7V5m0 0-4 4m4-4 4 4"/></svg>
-        </button>
-      }
     </div>
   );
 };
