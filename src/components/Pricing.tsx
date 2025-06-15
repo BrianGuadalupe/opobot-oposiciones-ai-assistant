@@ -1,8 +1,9 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import AcademyContactModal from "./AcademyContactModal";
+import { useState } from "react";
 
 const Pricing = () => {
   const plans = [
@@ -50,6 +51,8 @@ const Pricing = () => {
       popular: false
     }
   ];
+
+  const [modalOpen, setModalOpen] = useState(false);
 
   return (
     <section id="pricing" className="py-20 hero-gradient rounded-xl shadow-inner">
@@ -108,11 +111,11 @@ const Pricing = () => {
                 </ul>
                 {plan.name === 'Academias' ? (
                   <Button 
-                    asChild
+                    onClick={() => setModalOpen(true)}
                     className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
                     size="lg"
                   >
-                    <a href="/auth?mode=register" tabIndex={-1}>Contactar</a>
+                    Contactar
                   </Button>
                 ) : (
                   <Button 
@@ -127,6 +130,8 @@ const Pricing = () => {
             </Card>
           ))}
         </div>
+
+        <AcademyContactModal open={modalOpen} onOpenChange={setModalOpen} />
 
         <div className="text-center mt-12">
           <Button
@@ -145,4 +150,3 @@ const Pricing = () => {
 };
 
 export default Pricing;
-

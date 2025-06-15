@@ -1,1 +1,4 @@
 project_id = "dozaqjmdoblwqnuprxnq"
+
+[functions.academy-contact]
+verify_jwt = false
