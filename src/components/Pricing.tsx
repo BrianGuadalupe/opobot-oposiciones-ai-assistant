@@ -1,6 +1,8 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Star } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
 const Pricing = () => {
   const plans = [
@@ -73,10 +75,14 @@ const Pricing = () => {
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 z-20">
-                  <span className="bg-gradient-to-r from-opobot-blue to-opobot-green text-white px-6 py-2 rounded-full text-base font-semibold shadow">
-                    Más Popular ⭐
-                  </span>
+                <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full pointer-events-none">
+                  <Badge
+                    className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-opobot-blue to-opobot-green text-white text-base font-semibold shadow-lg ring-2 ring-opobot-blue/20 border-0 animate-pulse select-none"
+                    style={{ boxShadow: "0 4px 24px 0 rgba(37,99,235,0.14)" }}
+                  >
+                    <Star className="w-5 h-5 text-yellow-400 drop-shadow" strokeWidth={2.4} fill="#fde047" />
+                    Más Popular
+                  </Badge>
                 </div>
               )}
               
@@ -130,3 +136,4 @@ const Pricing = () => {
 };
 
 export default Pricing;
+
