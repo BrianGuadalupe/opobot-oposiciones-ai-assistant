@@ -18,6 +18,8 @@ const initialState = {
   phone: "",
 };
 
+const ACADEMY_CONTACT_EDGE_URL = "https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/academy-contact";
+
 const AcademyContactModal: React.FC<AcademyContactModalProps> = ({ open, onOpenChange }) => {
   const [form, setForm] = useState(initialState);
   const [loading, setLoading] = useState(false);
@@ -30,14 +32,11 @@ const AcademyContactModal: React.FC<AcademyContactModalProps> = ({ open, onOpenC
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || "/functions/v1"}/academy-contact`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(form),
-        }
-      );
+      const response = await fetch(ACADEMY_CONTACT_EDGE_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
       if (!response.ok) throw new Error("No se pudo enviar el mensaje");
       toast({ title: "¡Enviado!", description: "Te contactaremos pronto por email o teléfono." });
       setForm(initialState);
@@ -124,3 +123,4 @@ const AcademyContactModal: React.FC<AcademyContactModalProps> = ({ open, onOpenC
 };
 
 export default AcademyContactModal;
+
