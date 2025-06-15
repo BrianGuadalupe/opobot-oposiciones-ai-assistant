@@ -8,12 +8,17 @@ import ChatDemoExample from "@/components/ChatDemoExample";
 
 const Index = () => {
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <Header />
       <Hero />
+      {/* Espacio entre hero y demo */}
+      <div className="h-6 md:h-12" />
       <ChatDemoExample />
+      <div className="h-6 md:h-12" />
       <Features />
       <Pricing />
+      {/* Espacio para FAQ futura */}
+      <div className="h-10" />
       <Testimonials />
       <Footer />
     </div>

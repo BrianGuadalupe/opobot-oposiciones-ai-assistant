@@ -4,38 +4,44 @@ import { CheckCircle } from "lucide-react";
 
 const Hero = () => {
   return (
-    <section className="hero-gradient pt-20 pb-16 lg:pt-32 lg:pb-24">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center animate-fade-in">
-          <h1 className="text-4xl lg:text-6xl font-bold text-gray-900 mb-6">
-            Tu <span className="gradient-text">Asistente IA</span> para
+    <section className="hero-gradient pt-24 pb-20 lg:pt-36 lg:pb-28 rounded-b-3xl shadow-sm transition-all duration-500">
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Fondo animado de confianza */}
+        <div className="absolute inset-0 pointer-events-none animate-fade-in z-0">
+          <div className="w-40 h-40 bg-opobot-blue opacity-10 blur-3xl rounded-full absolute -top-8 -left-8"></div>
+          <div className="w-56 h-56 bg-opobot-green opacity-10 blur-2xl rounded-full absolute top-1/2 -right-10"></div>
+        </div>
+
+        <div className="relative z-10 text-center animate-fade-in">
+          <h1 className="text-4xl lg:text-6xl font-extrabold text-gray-900 mb-6 leading-tight font-inter">
+            <span className="gradient-text">Opobot</span>, tu IA para 
             <br />
-            Oposiciones al Estado
+            <span className="bg-gradient-to-r from-opobot-blue to-opobot-green bg-clip-text text-transparent">
+              Oposiciones al Estado
+            </span>
           </h1>
-          
           <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto leading-relaxed">
-            Opobot es el primer asistente de inteligencia artificial especializado 
-            en oposiciones españolas. Estudia de forma más eficiente, resuelve dudas 
-            al instante y domina tu temario como nunca antes.
+            Prepara, resuelve dudas y domina tu temario. Todo con tecnología de inteligencia artificial diseñada especialmente para el mundo de las oposiciones.
           </p>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-9 animate-scale-in">
             <Button 
               size="lg" 
-              className="bg-opobot-blue hover:bg-opobot-blue-dark text-lg px-8 py-4 rounded-xl"
+              className="bg-opobot-blue hover:bg-opobot-blue-dark text-lg px-8 py-4 rounded-xl shadow hover:scale-105 transition-transform focus-visible:ring-2"
             >
               Probar Gratis 7 Días
             </Button>
             <Button 
               variant="outline" 
               size="lg"
-              className="text-lg px-8 py-4 rounded-xl border-2"
+              className="text-lg px-8 py-4 border-2 rounded-xl border-opobot-blue hover:border-opobot-green transition-shadow hover:shadow"
             >
               Ver Demo
             </Button>
           </div>
 
-          <div className="flex items-center justify-center space-x-6 text-sm text-gray-600">
+          {/* Confianza y beneficios */}
+          <div className="flex flex-wrap justify-center gap-4 mb-6 text-sm text-gray-600">
             <div className="flex items-center space-x-2">
               <CheckCircle className="w-4 h-4 text-opobot-green" />
               <span>Sin permanencia</span>
@@ -49,35 +55,15 @@ const Hero = () => {
               <span>Soporte 24/7</span>
             </div>
           </div>
-        </div>
-
-        <div className="mt-16 animate-slide-up">
-          <div className="relative max-w-4xl mx-auto">
-            <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 p-6">
-              <div className="bg-gray-900 rounded-xl p-6 text-green-400 font-mono text-sm">
-                <div className="flex items-center space-x-2 mb-4">
-                  <div className="w-3 h-3 bg-red-500 rounded-full"></div>
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-400 ml-4">Opobot Assistant</span>
-                </div>
-                <div>
-                  <span className="text-blue-400">usuario@opobot:</span>
-                  <span className="text-white"> ¿Cuáles son los requisitos para ser Auxiliar Administrativo del Estado?</span>
-                </div>
-                <div className="mt-2 text-gray-300">
-                  🤖 <strong>Opobot:</strong> Para acceder a las oposiciones de Auxiliar Administrativo del Estado necesitas cumplir los siguientes requisitos:
-                  <br /><br />
-                  • Ser español o ciudadano de la UE
-                  <br />
-                  • Tener al menos 16 años
-                  <br />
-                  • Poseer el título de ESO o equivalente
-                  <br />
-                  • No estar inhabilitado para el ejercicio público...
-                </div>
-              </div>
-            </div>
+          
+          {/* Stats banner */}
+          <div className="flex flex-wrap items-center justify-center gap-4 mt-4 mb-2">
+            <span className="bg-gradient-to-r from-opobot-blue/90 to-opobot-green/80 text-white rounded-full px-5 py-2 text-sm font-semibold shadow pulse">
+              +5.000 opositores ya usan Opobot 🚀
+            </span>
+            <span className="bg-gray-100 rounded-full px-4 py-2 text-opobot-blue text-sm font-medium border border-gray-200">
+              +150.000 dudas resueltas
+            </span>
           </div>
         </div>
       </div>

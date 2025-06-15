@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle } from "lucide-react";
@@ -51,7 +50,7 @@ const Pricing = () => {
   ];
 
   return (
-    <section id="pricing" className="py-20 hero-gradient">
+    <section id="pricing" className="py-20 hero-gradient rounded-xl shadow-inner">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
@@ -67,16 +66,16 @@ const Pricing = () => {
           {plans.map((plan, index) => (
             <Card 
               key={index} 
-              className={`relative border-2 transition-all duration-300 hover:shadow-xl ${
+              className={`relative border-2 transition-all duration-300 hover:shadow-xl shadow-lg ${
                 plan.popular 
-                  ? 'border-opobot-blue shadow-lg scale-105' 
-                  : 'border-gray-200 hover:border-opobot-blue'
+                  ? 'border-opobot-blue scale-105 z-10 shadow-xl ring-2 ring-opobot-blue/40' 
+                  : 'border-gray-200 hover:border-opobot-blue bg-white/95'
               }`}
             >
               {plan.popular && (
-                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
-                  <span className="bg-gradient-to-r from-opobot-blue to-opobot-green text-white px-4 py-2 rounded-full text-sm font-semibold">
-                    Más Popular
+                <div className="absolute -top-5 left-1/2 transform -translate-x-1/2 z-20">
+                  <span className="bg-gradient-to-r from-opobot-blue to-opobot-green text-white px-6 py-2 rounded-full text-base font-semibold shadow">
+                    Más Popular ⭐
                   </span>
                 </div>
               )}
@@ -103,7 +102,7 @@ const Pricing = () => {
                 </ul>
 
                 <Button 
-                  className={`w-full ${
+                  className={`w-full rounded-lg text-base shadow-sm ${
                     plan.popular 
                       ? 'bg-opobot-blue hover:bg-opobot-blue-dark' 
                       : 'bg-gray-900 hover:bg-gray-800'
@@ -131,4 +130,3 @@ const Pricing = () => {
 };
 
 export default Pricing;
-
