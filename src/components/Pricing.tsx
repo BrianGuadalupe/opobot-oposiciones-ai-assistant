@@ -7,7 +7,7 @@ const Pricing = () => {
   const plans = [
     {
       name: "Básico",
-      price: "9,99",
+      price: "10",
       period: "mes",
       description: "Perfecto para empezar",
       features: [
@@ -20,7 +20,7 @@ const Pricing = () => {
     },
     {
       name: "Profesional",
-      price: "19,99", 
+      price: "20", 
       period: "mes",
       description: "Para estudiantes serios",
       features: [
@@ -35,7 +35,7 @@ const Pricing = () => {
     },
     {
       name: "Academias",
-      price: "49,99",
+      price: "50",
       period: "mes",
       description: "Solución para centros",
       features: [
@@ -131,3 +131,4 @@ const Pricing = () => {
 };
 
 export default Pricing;
+
