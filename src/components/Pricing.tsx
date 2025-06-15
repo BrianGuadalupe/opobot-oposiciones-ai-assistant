@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star } from "lucide-react";
@@ -107,20 +108,20 @@ const Pricing = () => {
                 </ul>
                 {plan.name === 'Academias' ? (
                   <Button 
+                    asChild
                     className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
                     size="lg"
                   >
-                    Contactar
+                    <a href="/auth?mode=register" tabIndex={-1}>Contactar</a>
                   </Button>
                 ) : (
-                  <a href="/auth?mode=register" tabIndex={-1} className="block">
-                    <Button 
-                      className="w-full rounded-lg text-base shadow-sm bg-gray-900 hover:bg-gray-800"
-                      size="lg"
-                    >
-                      Comenzar Gratis
-                    </Button>
-                  </a>
+                  <Button 
+                    asChild
+                    className="w-full rounded-lg text-base shadow-sm bg-gray-900 hover:bg-gray-800"
+                    size="lg"
+                  >
+                    <a href="/auth?mode=register" tabIndex={-1}>Comenzar Gratis</a>
+                  </Button>
                 )}
               </CardContent>
             </Card>
@@ -128,12 +129,15 @@ const Pricing = () => {
         </div>
 
         <div className="text-center mt-12">
-          <p className="text-gray-600">
-            ¿Necesitas algo diferente? 
-            <a href="#" className="text-opobot-blue hover:text-opobot-blue-dark font-semibold ml-1">
+          <Button
+            asChild
+            className="px-6 py-3 rounded-xl bg-opobot-blue hover:bg-opobot-blue-dark text-white text-base font-semibold shadow transition-all"
+            size="lg"
+          >
+            <a href="/auth?mode=register" tabIndex={-1}>
               Contáctanos para un plan personalizado
             </a>
-          </p>
+          </Button>
         </div>
       </div>
     </section>
@@ -141,3 +145,4 @@ const Pricing = () => {
 };
 
 export default Pricing;
+
