@@ -86,25 +86,28 @@ const ChatInterface = () => {
             onSubmit={e => { e.preventDefault(); handleSubmit(); }}
             className="flex w-full gap-2 items-end"
             autoComplete="off"
+            style={{}}
           >
-            <Textarea
-              value={inputMessage}
-              onChange={e => setInputMessage(e.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="Escribe tu mensaje…"
-              rows={1}
-              className="resize-none flex-1 min-h-[44px] max-h-44 text-base px-4 py-3 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
-              disabled={isLoading}
-              autoFocus
-              spellCheck
-              tabIndex={0}
-              aria-label="Escribe tu mensaje"
-            />
+            <div className="flex-1 flex">
+              <Textarea
+                value={inputMessage}
+                onChange={e => setInputMessage(e.target.value)}
+                onKeyDown={handleInputKeyDown}
+                placeholder="Escribe tu mensaje…"
+                rows={1}
+                className="resize-none w-full min-h-[44px] max-h-44 text-base px-4 py-3 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
+                disabled={isLoading}
+                autoFocus
+                spellCheck
+                tabIndex={0}
+                aria-label="Escribe tu mensaje"
+              />
+            </div>
             <Button
               type="submit"
               disabled={!inputMessage.trim() || isLoading}
               size="icon"
-              className="bg-opobot-blue text-white rounded-xl shadow-none transition hover:bg-opobot-blue-dark focus-visible:outline border border-opobot-blue h-12 w-12 flex items-center justify-center"
+              className="bg-opobot-blue text-white rounded-xl shadow-none transition hover:bg-opobot-blue-dark focus-visible:outline border border-opobot-blue"
               aria-label="Enviar"
               tabIndex={0}
             >
@@ -118,4 +121,3 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
-
