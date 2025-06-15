@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Send } from 'lucide-react';
@@ -78,14 +79,12 @@ const ChatInterface = () => {
           </div>
         )}
       </div>
-      {/* Fix caja de texto abajo (pantalla completa) */}
+      {/* Caja de texto abajo, fijo. Botón alineado al lado del textarea como ChatGPT */}
       <div className="fixed bottom-0 left-0 right-0 bg-[#f7f7fb]/95 backdrop-blur flex justify-center py-5 px-2 border-t border-gray-100 z-30">
-        {/* Espacio reservado para futuras acciones, ejemplo: regenerar, copiar */}
         <div className="w-full sm:max-w-2xl mx-auto flex gap-2 items-end">
-          {/* FUTURE: <Button title="Regenerar"><ReplayIcon /></Button> */}
           <form
             onSubmit={e => { e.preventDefault(); handleSubmit(); }}
-            className="flex w-full gap-1"
+            className="flex w-full gap-2 items-end"
             autoComplete="off"
           >
             <Textarea
@@ -94,7 +93,7 @@ const ChatInterface = () => {
               onKeyDown={handleInputKeyDown}
               placeholder="Escribe tu mensaje…"
               rows={1}
-              className="resize-none flex-1 min-h-[44px] max-h-44 text-base px-4 py-3 pr-10 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
+              className="resize-none flex-1 min-h-[44px] max-h-44 text-base px-4 py-3 shadow-sm border border-gray-300 rounded-xl bg-white transition-all focus-visible:ring-1 focus-visible:ring-opobot-blue placeholder:text-gray-400"
               disabled={isLoading}
               autoFocus
               spellCheck
@@ -105,7 +104,7 @@ const ChatInterface = () => {
               type="submit"
               disabled={!inputMessage.trim() || isLoading}
               size="icon"
-              className="absolute right-8 bottom-8 bg-opobot-blue text-white rounded-lg shadow-none transition hover:bg-opobot-blue-dark focus-visible:outline"
+              className="bg-opobot-blue text-white rounded-xl shadow-none transition hover:bg-opobot-blue-dark focus-visible:outline border border-opobot-blue h-12 w-12 flex items-center justify-center"
               aria-label="Enviar"
               tabIndex={0}
             >
@@ -119,3 +118,4 @@ const ChatInterface = () => {
 };
 
 export default ChatInterface;
+
