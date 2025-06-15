@@ -1,4 +1,3 @@
-
 import { User, Bot } from "lucide-react";
 
 const ChatDemoExample = () => {
@@ -13,7 +12,7 @@ const ChatDemoExample = () => {
           <div className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
           <div className="w-2.5 h-2.5 rounded-full bg-green-500" />
           <span className="ml-4 text-gray-300 text-xs font-semibold tracking-wide">
-            Demo interactivo (segundos reales)
+            Opobot
           </span>
         </div>
         <div className="p-6 space-y-4 bg-gray-50">
