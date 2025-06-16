@@ -1,15 +1,18 @@
 
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscription } from "@/hooks/useSubscription";
 import { Navigate } from "react-router-dom";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
+  requireSubscription?: boolean;
 }
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRouteProps) => {
   const { user, loading } = useAuth();
+  const { subscribed, loading: subscriptionLoading } = useSubscription();
 
-  if (loading) {
+  if (loading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -24,6 +27,10 @@ const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
 
   if (!user) {
     return <Navigate to="/auth" replace />;
+  }
+
+  if (requireSubscription && !subscribed) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;
