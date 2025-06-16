@@ -1,4 +1,3 @@
-
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,6 +11,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  resetPassword: (newPassword: string) => Promise<{ error: any }>;
   loading: boolean;
 }
 
@@ -184,6 +184,34 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     }
   };
 
+  const resetPassword = async (newPassword: string) => {
+    try {
+      // Password validation
+      const passwordValidation = validatePassword(newPassword);
+      if (!passwordValidation.isValid) {
+        return { 
+          error: { 
+            message: `Contraseña no válida: ${passwordValidation.errors.join(', ')}` 
+          } 
+        };
+      }
+
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      });
+
+      if (error) {
+        console.error('Password reset error:', error);
+        return { error: { message: 'Error al actualizar la contraseña' } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      handleSecureError(error, 'Error al restablecer contraseña');
+      return { error: { message: 'Error al restablecer contraseña' } };
+    }
+  };
+
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
@@ -199,6 +227,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     signUp,
     signIn,
     signOut,
+    resetPassword,
     loading
   };
 
