@@ -15,7 +15,7 @@ const Pricing = () => {
   const plans = [
     {
       name: "Básico",
-      price: "9,99",
+      price: "9,95",
       period: "mes",
       priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhU", // Reemplaza con tu Price ID real de Stripe
       description: "Perfecto para empezar",
@@ -29,7 +29,7 @@ const Pricing = () => {
     },
     {
       name: "Profesional",
-      price: "19,99", 
+      price: "19,95", 
       period: "mes",
       priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhV", // Reemplaza con tu Price ID real de Stripe
       description: "Para estudiantes serios",
@@ -45,7 +45,7 @@ const Pricing = () => {
     },
     {
       name: "Academias",
-      price: "49,99",
+      price: "49,95",
       period: "mes",
       priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhW", // Reemplaza con tu Price ID real de Stripe
       description: "Solución para centros",
