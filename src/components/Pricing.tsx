@@ -31,7 +31,7 @@ const Pricing = () => {
       name: "Profesional",
       price: "19,95", 
       period: "mes",
-      priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhV", // Reemplaza con tu Price ID real de Stripe
+      priceId: "price_1RakGGG0tRQlugBefzfK7piu", // Price ID real de Stripe para plan Profesional
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",
