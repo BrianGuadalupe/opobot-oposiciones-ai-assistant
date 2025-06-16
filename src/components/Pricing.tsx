@@ -17,7 +17,7 @@ const Pricing = () => {
       name: "Básico",
       price: "9,95",
       period: "mes",
-      priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhU", // Reemplaza con tu Price ID real de Stripe
+      priceId: "price_1RakDbG0tRQlugBejNs3yIVA", // Price ID real de Stripe para plan Básico
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
