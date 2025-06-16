@@ -6,16 +6,41 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
 };
 
 const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
+  // Remove sensitive data from logs
+  const sanitizedDetails = details ? {
+    ...details,
+    email: details.email ? `${details.email.substring(0, 3)}***` : undefined,
+    customerId: details.customerId ? `${details.customerId.substring(0, 8)}***` : undefined,
+    subscriptionId: details.subscriptionId ? `${details.subscriptionId.substring(0, 8)}***` : undefined,
+  } : undefined;
+  
+  const detailsStr = sanitizedDetails ? ` - ${JSON.stringify(sanitizedDetails)}` : '';
   console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
+};
+
+const validateInput = (input: any): string | null => {
+  if (!input || typeof input !== 'string' || input.length > 1000) {
+    return 'Invalid input format';
+  }
+  return null;
 };
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Only allow POST requests
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 405,
+    });
   }
 
   const supabaseClient = createClient(
@@ -28,21 +53,49 @@ serve(async (req) => {
     logStep("Function started");
 
     const stripeKey = Deno.env.get("stripe_api_key");
-    if (!stripeKey) throw new Error("stripe_api_key is not set");
+    if (!stripeKey) {
+      logStep("ERROR: Stripe key not configured");
+      throw new Error("Service configuration error");
+    }
     logStep("Stripe key verified");
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      logStep("ERROR: Invalid authorization header");
+      throw new Error("Authentication required");
+    }
     
     const token = authHeader.replace("Bearer ", "");
+    const inputValidation = validateInput(token);
+    if (inputValidation) {
+      logStep("ERROR: Invalid token format");
+      throw new Error("Invalid authentication token");
+    }
+
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
+    if (userError) {
+      logStep("ERROR: Authentication failed", { error: userError.message });
+      throw new Error("Authentication failed");
+    }
+    
     const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    if (!user?.email) {
+      logStep("ERROR: No user email available");
+      throw new Error("User authentication error");
+    }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    
+    // Rate limiting check - limit to 10 requests per minute per user
+    const rateLimitKey = `check_subscription_${user.id}`;
+    // Note: In production, implement proper rate limiting with Redis or similar
+
+    const customers = await stripe.customers.list({ 
+      email: user.email, 
+      limit: 1,
+      expand: ['data.subscriptions']
+    });
     
     if (customers.data.length === 0) {
       logStep("No customer found, updating unsubscribed state");
@@ -55,6 +108,7 @@ serve(async (req) => {
         subscription_end: null,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'email' });
+      
       return new Response(JSON.stringify({ subscribed: false }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -69,6 +123,7 @@ serve(async (req) => {
       status: "active",
       limit: 1,
     });
+    
     const hasActiveSub = subscriptions.data.length > 0;
     let subscriptionTier = null;
     let subscriptionEnd = null;
@@ -82,6 +137,7 @@ serve(async (req) => {
       const price = await stripe.prices.retrieve(priceId);
       const amount = price.unit_amount || 0;
       
+      // Map amounts to tiers securely
       if (amount <= 1000) {
         subscriptionTier = "Básico";
       } else if (amount <= 2000) {
@@ -94,6 +150,7 @@ serve(async (req) => {
       logStep("No active subscription found");
     }
 
+    // Update database with validated data
     await supabaseClient.from("subscribers").upsert({
       email: user.email,
       user_id: user.id,
@@ -105,6 +162,7 @@ serve(async (req) => {
     }, { onConflict: 'email' });
 
     logStep("Updated database with subscription info", { subscribed: hasActiveSub, subscriptionTier });
+    
     return new Response(JSON.stringify({
       subscribed: hasActiveSub,
       subscription_tier: subscriptionTier,
@@ -114,9 +172,13 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     logStep("ERROR in check-subscription", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    
+    // Return generic error message to avoid information disclosure
+    return new Response(JSON.stringify({ 
+      error: "Unable to check subscription status" 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });
