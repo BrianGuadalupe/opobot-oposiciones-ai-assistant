@@ -47,7 +47,7 @@ const Pricing = () => {
       name: "Academias",
       price: "49,95",
       period: "mes",
-      priceId: "price_1QSk1A2eZvKYlo2CqWcRkJhW", // Reemplaza con tu Price ID real de Stripe
+      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // Price ID real de Stripe para plan Academias
       description: "Solución para centros",
       features: [
         "Hasta 50 estudiantes",
