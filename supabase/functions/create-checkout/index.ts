@@ -23,82 +23,60 @@ const PLAN_MAPPING = {
 };
 
 serve(async (req) => {
-  // Cronometro para medir tiempo de ejecución
   const startTime = Date.now();
-  const timeTracker = {
-    start: startTime,
-    current: () => Date.now() - startTime
-  };
-
+  
+  logStep("=== FUNCTION STARTED ===");
+  
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    logStep(`CORS preflight request handled in ${timeTracker.current()}ms`);
+    logStep("CORS preflight handled");
     return new Response(null, { headers: corsHeaders });
   }
 
-  logStep(`=== FUNCTION STARTED ===`);
-  
   try {
     // Environment variables check
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
-    logStep(`Environment check at ${timeTracker.current()}ms`, {
-      supabaseUrl: supabaseUrl ? "present" : "missing",
-      supabaseKey: supabaseKey ? "present" : "missing", 
-      stripeKey: stripeKey ? "present" : "missing"
+    logStep("Environment check", {
+      supabaseUrl: supabaseUrl ? "✓" : "✗",
+      supabaseKey: supabaseKey ? "✓" : "✗", 
+      stripeKey: stripeKey ? "✓" : "✗"
     });
 
-    if (!supabaseUrl || !supabaseKey) {
-      logStep("ERROR: Missing Supabase environment variables");
-      return new Response(JSON.stringify({ 
-        error: "Missing Supabase configuration"
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      });
-    }
-
-    if (!stripeKey) {
-      logStep("ERROR: Missing Stripe secret key");
-      return new Response(JSON.stringify({ 
-        error: "Missing Stripe secret key"
-      }), {
+    if (!supabaseUrl || !supabaseKey || !stripeKey) {
+      const error = "Missing environment variables";
+      logStep("ERROR: " + error);
+      return new Response(JSON.stringify({ error }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });
     }
 
     // Create Supabase client
-    logStep(`Creating Supabase client at ${timeTracker.current()}ms`);
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
-    logStep(`Supabase client created at ${timeTracker.current()}ms`);
 
     // Get authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      logStep(`ERROR: No authorization header at ${timeTracker.current()}ms`);
-      return new Response(JSON.stringify({ 
-        error: "No authorization header provided"
-      }), {
+      logStep("ERROR: No authorization header");
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
     const token = authHeader.replace("Bearer ", "");
-    logStep(`Token extracted at ${timeTracker.current()}ms`, { tokenLength: token.length });
+    logStep("Token extracted", { length: token.length });
 
     // Authenticate user
-    logStep(`=== AUTHENTICATING USER at ${timeTracker.current()}ms ===`);
+    logStep("=== AUTHENTICATING USER ===");
     const authResponse = await supabaseClient.auth.getUser(token);
     
     if (authResponse.error) {
-      logStep(`ERROR: Authentication failed at ${timeTracker.current()}ms`, { error: authResponse.error.message });
-      return new Response(JSON.stringify({ 
-        error: `Authentication failed: ${authResponse.error.message}`
-      }), {
+      logStep("ERROR: Authentication failed", { error: authResponse.error.message });
+      return new Response(JSON.stringify({ error: "Authentication failed" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
@@ -106,40 +84,34 @@ serve(async (req) => {
 
     const user = authResponse.data.user;
     if (!user?.email) {
-      logStep(`ERROR: No user or email at ${timeTracker.current()}ms`);
-      return new Response(JSON.stringify({ 
-        error: "User not authenticated or email not available"
-      }), {
+      logStep("ERROR: No user or email");
+      return new Response(JSON.stringify({ error: "User not authenticated" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
-    logStep(`User authenticated successfully at ${timeTracker.current()}ms`, { 
+    logStep("User authenticated", { 
       userId: user.id, 
       email: user.email.substring(0, 3) + "***"
     });
 
     // Parse request body
-    logStep(`=== PARSING REQUEST BODY at ${timeTracker.current()}ms ===`);
+    logStep("=== PARSING REQUEST BODY ===");
     let requestBody;
     try {
       const bodyText = await req.text();
-      logStep(`Raw body received at ${timeTracker.current()}ms`, { bodyLength: bodyText.length });
+      logStep("Raw body received", { length: bodyText.length });
       
       if (!bodyText) {
         throw new Error("Empty request body");
       }
       
       requestBody = JSON.parse(bodyText);
-      logStep(`Request body parsed at ${timeTracker.current()}ms`, { keys: Object.keys(requestBody) });
+      logStep("Body parsed", { keys: Object.keys(requestBody) });
     } catch (parseError) {
-      logStep(`ERROR: Failed to parse request body at ${timeTracker.current()}ms`, { 
-        error: parseError instanceof Error ? parseError.message : String(parseError) 
-      });
-      return new Response(JSON.stringify({ 
-        error: "Invalid request body"
-      }), {
+      logStep("ERROR: Failed to parse body", { error: parseError.message });
+      return new Response(JSON.stringify({ error: "Invalid request body" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
@@ -147,110 +119,84 @@ serve(async (req) => {
 
     const { planName } = requestBody;
     if (!planName || typeof planName !== 'string') {
-      logStep(`ERROR: Missing or invalid planName at ${timeTracker.current()}ms`, { planName });
-      return new Response(JSON.stringify({ 
-        error: "Missing or invalid planName"
-      }), {
+      logStep("ERROR: Invalid planName", { planName });
+      return new Response(JSON.stringify({ error: "Invalid planName" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    // Securely map planName to priceId on server side
+    // Map planName to priceId
     const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
     if (!priceId) {
-      logStep(`ERROR: Invalid plan name at ${timeTracker.current()}ms`, { 
-        planName, 
-        availablePlans: Object.keys(PLAN_MAPPING) 
-      });
-      return new Response(JSON.stringify({ 
-        error: "Invalid plan name"
-      }), {
+      logStep("ERROR: Invalid plan", { planName, available: Object.keys(PLAN_MAPPING) });
+      return new Response(JSON.stringify({ error: "Invalid plan name" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    logStep(`Plan mapped successfully at ${timeTracker.current()}ms`, { planName, priceId });
+    logStep("Plan mapped", { planName, priceId });
 
     // Initialize Stripe
-    try {
-      logStep(`=== INITIALIZING STRIPE at ${timeTracker.current()}ms ===`);
-      const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-      logStep(`Stripe initialized at ${timeTracker.current()}ms`);
-      
-      // Check for existing customer
-      logStep(`=== CHECKING FOR EXISTING CUSTOMER at ${timeTracker.current()}ms ===`);
-      const customers = await stripe.customers.list({ 
-        email: user.email, 
-        limit: 1 
-      });
-      logStep(`Customer search completed at ${timeTracker.current()}ms`, { customersFound: customers.data.length });
-
-      let customerId;
-      if (customers.data.length > 0) {
-        customerId = customers.data[0].id;
-        logStep(`Existing customer found at ${timeTracker.current()}ms`, { customerId });
-      } else {
-        logStep(`No existing customer found at ${timeTracker.current()}ms, will create new one during checkout`);
-      }
-
-      // Get origin for redirect URLs
-      const origin = req.headers.get("origin") || "https://www.opobots.com";
-      logStep(`=== CREATING CHECKOUT SESSION at ${timeTracker.current()}ms ===`, { 
-        origin, 
-        customerId: customerId ? "present" : "will_create", 
-        priceId, 
-        planName 
-      });
-
-      // Create checkout session
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        customer_email: customerId ? undefined : user.email,
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        mode: "subscription",
-        success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/?canceled=true`,
-        metadata: {
-          user_id: user.id,
-          plan_name: planName,
-        },
-      });
-
-      logStep(`=== CHECKOUT SESSION CREATED SUCCESSFULLY at ${timeTracker.current()}ms ===`, { 
-        sessionId: session.id, 
-        url: session.url ? "present" : "missing"
-      });
-
-      return new Response(JSON.stringify({ url: session.url }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    } catch (stripeError) {
-      logStep(`=== STRIPE ERROR at ${timeTracker.current()}ms ===`, { 
-        error: stripeError instanceof Error ? stripeError.message : String(stripeError)  
-      });
-      return new Response(JSON.stringify({ 
-        error: stripeError instanceof Error ? stripeError.message : "Stripe error occurred"
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      });
-    }
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const stack = error instanceof Error ? error.stack : 'No stack available';
+    logStep("=== INITIALIZING STRIPE ===");
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
     
-    logStep(`=== CRITICAL ERROR OCCURRED at ${timeTracker.current()}ms ===`, { 
+    // Check for existing customer
+    logStep("=== CHECKING CUSTOMER ===");
+    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    
+    let customerId;
+    if (customers.data.length > 0) {
+      customerId = customers.data[0].id;
+      logStep("Existing customer found", { customerId });
+    } else {
+      logStep("No existing customer - will create during checkout");
+    }
+
+    // Get origin for URLs
+    const origin = req.headers.get("origin") || "https://www.opobots.com";
+    logStep("=== CREATING CHECKOUT SESSION ===", { origin, customerId: customerId ? "exists" : "new" });
+
+    // Create checkout session
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      customer_email: customerId ? undefined : user.email,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
+        },
+      ],
+      mode: "subscription",
+      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/?canceled=true`,
+      metadata: {
+        user_id: user.id,
+        plan_name: planName,
+      },
+    });
+
+    const executionTime = Date.now() - startTime;
+    logStep("=== SUCCESS ===", { 
+      sessionId: session.id,
+      url: session.url ? "✓" : "✗",
+      executionTime: `${executionTime}ms`
+    });
+
+    return new Response(JSON.stringify({ url: session.url }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+
+  } catch (error) {
+    const executionTime = Date.now() - startTime;
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    logStep("=== CRITICAL ERROR ===", { 
       message: errorMessage,
       type: error?.constructor?.name || 'Unknown',
-      stack: stack?.split('\n').slice(0, 3).join('\n')
+      executionTime: `${executionTime}ms`
     });
     
     return new Response(JSON.stringify({ 

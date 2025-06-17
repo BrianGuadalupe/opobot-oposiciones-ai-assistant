@@ -67,22 +67,24 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (planName: string) => {
-    console.log('=== INICIO createCheckoutSession (Híbrida Segura) ===');
-    console.log('planName:', planName);
+    console.log('=== CHECKOUT SESSION START ===');
+    console.log('Plan:', planName);
+    console.log('User:', !!user);
+    console.log('Session:', !!session);
     
-    // Si no hay usuario autenticado, redirigir directamente al registro
+    // Redirect to auth if no user
     if (!user || !session || !validateSession(session)) {
-      console.log('No user or session found, redirecting to registration');
+      console.log('No valid session, redirecting to auth');
       toast({
         title: "Regístrate",
-        description: "Necesitas registrarte para suscribirte. Te redirigiremos a la página de registro.",
+        description: "Necesitas registrarte para suscribirte.",
       });
       window.location.href = '/auth?mode=register';
       return;
     }
 
-    // Validate planName (solo validación básica)
-    if (!planName || typeof planName !== 'string' || planName.length > 50) {
+    // Validate planName
+    if (!planName || typeof planName !== 'string') {
       console.error('Invalid planName:', planName);
       toast({
         title: "Error",
@@ -93,97 +95,43 @@ export const useSubscription = () => {
     }
 
     setLoading(true);
-    console.log('Loading set to true');
+    console.log('Starting checkout process...');
 
     try {
-      console.log('=== LLAMANDO A create-checkout (Híbrida) ===');
-      console.log('Enviando solo planName:', planName);
-      console.log('Session access token exists:', !!session.access_token);
+      console.log('=== CALLING EDGE FUNCTION ===');
+      console.log('Function name: create-checkout');
+      console.log('Request body:', { planName });
       
-      // Verificar las cabeceras de la llamada a la API
-      const headers = {
-        Authorization: `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json',
-      };
-      console.log('Headers para petición:', Object.keys(headers));
+      const response = await supabase.functions.invoke('create-checkout', {
+        body: { planName: planName.trim() },
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       
-      // Preparar el body para debugging
-      const body = { planName: planName.trim() };
-      console.log('Body para petición:', body);
-      
-      console.log('=== PUNTO A: Antes de invoke ===');
-      
-      // Realizar la petición con manejo de errores mejorado
-      let response;
-      try {
-        console.log('=== PUNTO B: Iniciando invoke ===');
-        response = await supabase.functions.invoke('create-checkout', {
-          body: body,
-          headers: headers,
-        });
-        console.log('=== PUNTO C: Invoke completado ===');
-        console.log('Response recibida:', response);
-      } catch (invokeError) {
-        console.error('=== ERROR EN INVOKE ===');
-        console.error('Error type:', typeof invokeError);
-        console.error('Error constructor:', invokeError?.constructor?.name);
-        console.error('Error message:', invokeError?.message);
-        console.error('Error stack:', invokeError?.stack);
-        console.error('Full error object:', invokeError);
-        throw new Error(`Error en invocación de la función: ${invokeError?.message || 'Error desconocido'}`);
-      }
-      
-      console.log('=== RESPUESTA DE create-checkout ===');
-      console.log('response completa:', response);
-      
+      console.log('=== RESPONSE RECEIVED ===');
+      console.log('Response:', response);
+
       if (response.error) {
-        console.error('=== ERROR EN create-checkout ===');
-        console.error('Error object:', response.error);
-        throw new Error(`Error en checkout: ${response.error.message || 'Error desconocido'}`);
+        console.error('Edge function error:', response.error);
+        throw new Error(response.error.message || 'Error en el servidor');
       }
 
       const data = response.data;
-      if (!data) {
-        console.error('=== NO DATA RECEIVED ===');
-        throw new Error('No se recibió respuesta del servidor');
+      if (!data?.url) {
+        console.error('No URL in response:', data);
+        throw new Error('No se recibió URL de checkout');
       }
 
-      console.log('=== DATOS RECIBIDOS ===');
-      console.log('Data:', data);
-
-      if (!data.url || typeof data.url !== 'string') {
-        console.error('=== DATOS INVÁLIDOS ===');
-        console.error('Invalid response data:', data);
-        throw new Error('URL de checkout inválida recibida del servidor');
-      }
-
-      // Validate URL before opening
-      try {
-        const url = new URL(data.url);
-        console.log('=== URL VALIDADA ===');
-        console.log('URL hostname:', url.hostname);
-        if (!url.hostname.includes('checkout.stripe.com')) {
-          throw new Error('Dominio de URL de checkout inválido');
-        }
-      } catch (urlError) {
-        console.error('=== ERROR DE VALIDACIÓN DE URL ===');
-        console.error('URL validation error:', urlError);
-        throw new Error('Formato de URL de checkout inválido');
-      }
-
-      console.log('=== REDIRIGIENDO A STRIPE ===');
-      console.log('Redirecting to Stripe checkout:', data.url);
+      console.log('=== REDIRECTING TO STRIPE ===');
+      console.log('Checkout URL:', data.url);
       
       // Redirect to Stripe checkout
       window.location.href = data.url;
       
     } catch (error) {
-      console.error('=== ERROR FINAL ===');
-      console.error('Error type:', typeof error);
-      console.error('Error constructor:', error?.constructor?.name);
-      console.error('Error message:', error?.message);
-      console.error('Error stack:', error?.stack);
-      console.error('Full error object:', error);
+      console.error('=== CHECKOUT ERROR ===');
+      console.error('Error:', error);
       
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
@@ -193,7 +141,7 @@ export const useSubscription = () => {
         variant: "destructive",
       });
     } finally {
-      console.log('=== FINALIZANDO - Setting loading to false ===');
+      console.log('=== CHECKOUT COMPLETE ===');
       setLoading(false);
     }
   };
