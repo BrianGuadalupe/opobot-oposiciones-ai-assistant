@@ -9,7 +9,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Plan mapping - actualizado para incluir "Básico"
+// Plan mapping - CRÍTICO: usar las claves exactas de Stripe
 const PLAN_MAPPING = {
   "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
   "Profesional": "price_1RakGGG0tRQIugBefzFK7piu"
@@ -17,96 +17,135 @@ const PLAN_MAPPING = {
 
 const logStep = (step: string, details?: any) => {
   const timestamp = new Date().toISOString();
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[${timestamp}] [CREATE-CHECKOUT] ${step}${detailsStr}`);
+  console.log(`[${timestamp}] [CREATE-CHECKOUT] ${step}`);
+  if (details) {
+    console.log(`[${timestamp}] [CREATE-CHECKOUT] Details:`, JSON.stringify(details, null, 2));
+  }
 };
 
 serve(async (req) => {
-  logStep("=== CREATE CHECKOUT FUNCTION STARTED ===");
+  logStep("=== FUNCTION STARTED ===");
   
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    logStep("CORS preflight handled");
+    logStep("Handling CORS preflight");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Environment check
+    // 1. VERIFICAR VARIABLES DE ENTORNO CRÍTICAS
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
-    logStep("Environment check", {
+    logStep("Environment variables check", {
       supabaseUrl: !!supabaseUrl,
       supabaseKey: !!supabaseKey,
-      stripeKey: !!stripeKey
+      stripeKey: !!stripeKey,
+      stripeKeyPrefix: stripeKey ? stripeKey.substring(0, 8) + "..." : "MISSING"
     });
 
     if (!supabaseUrl || !supabaseKey || !stripeKey) {
-      logStep("ERROR: Missing environment variables");
-      return new Response(JSON.stringify({ error: "Missing environment variables" }), {
+      const missing = [];
+      if (!supabaseUrl) missing.push("SUPABASE_URL");
+      if (!supabaseKey) missing.push("SUPABASE_ANON_KEY");
+      if (!stripeKey) missing.push("STRIPE_SECRET_KEY");
+      
+      logStep("CRITICAL ERROR: Missing environment variables", { missing });
+      return new Response(JSON.stringify({ 
+        error: "Server configuration error",
+        missing: missing 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
       });
     }
 
-    // Create Supabase client
+    // 2. VERIFICAR MÉTODO HTTP
+    if (req.method !== "POST") {
+      logStep("ERROR: Invalid HTTP method", { method: req.method });
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 405,
+      });
+    }
+
+    // 3. CREAR CLIENTE SUPABASE CON TIMEOUT
+    logStep("Creating Supabase client");
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
 
-    // Get and validate auth
+    // 4. VERIFICAR AUTENTICACIÓN
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       logStep("ERROR: No authorization header");
-      return new Response(JSON.stringify({ error: "No authorization header" }), {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
     const token = authHeader.replace("Bearer ", "");
-    logStep("Authenticating user with token length", { tokenLength: token.length });
+    logStep("Authenticating user", { tokenLength: token.length });
 
-    const { data: { user }, error: authError } = await supabaseClient.auth.getUser(token);
+    // Timeout para auth
+    const authPromise = supabaseClient.auth.getUser(token);
+    const authTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Auth timeout")), 10000);
+    });
+
+    const { data: { user }, error: authError } = await Promise.race([authPromise, authTimeout]) as any;
     
     if (authError || !user?.email) {
-      logStep("ERROR: Authentication failed", { authError });
+      logStep("ERROR: Authentication failed", { 
+        authError: authError?.message,
+        hasUser: !!user,
+        hasEmail: !!user?.email 
+      });
       return new Response(JSON.stringify({ error: "Authentication failed" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
-    logStep("User authenticated successfully", { userId: user.id, email: user.email });
+    logStep("User authenticated successfully", { 
+      userId: user.id, 
+      email: user.email?.substring(0, 5) + "***" 
+    });
 
-    // Parse request body
-    logStep("Parsing request body...");
+    // 5. PARSEAR BODY CON MANEJO DE ERRORES
     let requestBody;
     try {
       const bodyText = await req.text();
-      logStep("Raw body received", { bodyLength: bodyText.length, body: bodyText });
+      logStep("Raw body received", { bodyLength: bodyText.length });
+      
+      if (!bodyText) {
+        throw new Error("Empty request body");
+      }
+      
       requestBody = JSON.parse(bodyText);
-      logStep("Request body parsed successfully", requestBody);
+      logStep("Request body parsed", { planName: requestBody.planName });
     } catch (error) {
-      logStep("ERROR: Failed to parse body", { error: error.message });
+      logStep("ERROR: Failed to parse request body", { error: error.message });
       return new Response(JSON.stringify({ error: "Invalid request body" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
+    // 6. VALIDAR PLAN NAME
     const { planName } = requestBody;
     if (!planName || typeof planName !== 'string') {
       logStep("ERROR: Invalid planName", { planName, type: typeof planName });
-      return new Response(JSON.stringify({ error: "Invalid planName" }), {
+      return new Response(JSON.stringify({ error: "Invalid plan name" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
     }
 
-    // Get price ID
+    // 7. OBTENER PRICE ID
     const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
     if (!priceId) {
-      logStep("ERROR: Plan not found in mapping", { 
+      logStep("ERROR: Plan not found", { 
         planName, 
         availablePlans: Object.keys(PLAN_MAPPING) 
       });
@@ -121,28 +160,36 @@ serve(async (req) => {
 
     logStep("Plan mapped successfully", { planName, priceId });
 
-    // Initialize Stripe
-    logStep("Initializing Stripe...");
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    // 8. INICIALIZAR STRIPE CON TIMEOUT
+    logStep("Initializing Stripe");
+    const stripe = new Stripe(stripeKey, { 
+      apiVersion: "2023-10-16",
+      timeout: 15000 // 15 segundos timeout
+    });
     
-    // Check for existing customer
-    logStep("Checking for existing customer...");
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    // 9. VERIFICAR CUSTOMER EXISTENTE CON TIMEOUT
+    logStep("Checking for existing customer");
+    const customersPromise = stripe.customers.list({ email: user.email, limit: 1 });
+    const customersTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Customers API timeout")), 10000);
+    });
+
+    const customers = await Promise.race([customersPromise, customersTimeout]) as any;
     
     let customerId;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
-      logStep("Existing customer found", { customerId });
+      logStep("Existing customer found", { customerId: customerId.substring(0, 8) + "..." });
     } else {
-      logStep("No existing customer found, will create new one");
+      logStep("No existing customer found");
     }
 
-    // Get origin
-    const origin = req.headers.get("origin") || "https://www.opobots.com";
+    // 10. OBTENER ORIGIN
+    const origin = req.headers.get("origin") || req.headers.get("referer") || "https://opobots.com";
     logStep("Using origin for URLs", { origin });
 
-    // Create checkout session
-    logStep("Creating Stripe checkout session...");
+    // 11. CREAR CHECKOUT SESSION CON TIMEOUT
+    logStep("Creating Stripe checkout session");
     const sessionData = {
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
@@ -159,17 +206,25 @@ serve(async (req) => {
         user_id: user.id,
         plan_name: planName,
       },
+      allow_promotion_codes: true,
+      billing_address_collection: 'required',
     };
 
     logStep("Session data prepared", sessionData);
 
-    const session = await stripe.checkout.sessions.create(sessionData);
-
-    logStep("Checkout session created successfully", { 
-      sessionId: session.id, 
-      url: session.url 
+    const sessionPromise = stripe.checkout.sessions.create(sessionData);
+    const sessionTimeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Checkout session creation timeout")), 15000);
     });
 
+    const session = await Promise.race([sessionPromise, sessionTimeout]) as any;
+
+    logStep("Checkout session created successfully", { 
+      sessionId: session.id,
+      hasUrl: !!session.url
+    });
+
+    // 12. RESPUESTA EXITOSA
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
@@ -179,18 +234,26 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const errorStack = error instanceof Error ? error.stack : undefined;
     
-    logStep("CRITICAL ERROR in create-checkout", { 
+    logStep("CRITICAL ERROR", { 
       message: errorMessage,
       stack: errorStack,
       timestamp: new Date().toISOString()
     });
+    
+    // Determinar el tipo de error para el status code
+    let statusCode = 500;
+    if (errorMessage.includes("timeout") || errorMessage.includes("Timeout")) {
+      statusCode = 504; // Gateway Timeout
+    } else if (errorMessage.includes("auth") || errorMessage.includes("Authentication")) {
+      statusCode = 401; // Unauthorized
+    }
     
     return new Response(JSON.stringify({ 
       error: errorMessage,
       timestamp: new Date().toISOString()
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: statusCode,
     });
   }
 });

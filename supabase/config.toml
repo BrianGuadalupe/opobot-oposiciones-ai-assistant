@@ -1,14 +1,25 @@
 
 project_id = "dozaqjmdoblwqnuprxnq"
 
-[functions.academy-contact]
-verify_jwt = false
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+
+[studio]
+enabled = true
+port = 54323
 
 [functions.create-checkout]
+
+[functions.stripe-webhook]
 verify_jwt = false
 
 [functions.check-subscription]
-verify_jwt = false
 
 [functions.customer-portal]
-verify_jwt = false
