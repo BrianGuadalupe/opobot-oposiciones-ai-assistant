@@ -9,109 +9,96 @@ const corsHeaders = {
 };
 
 const logStep = (step: string, details?: any) => {
+  const timestamp = new Date().toISOString();
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
+  console.log(`[${timestamp}] [CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
 serve(async (req) => {
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
+    logStep("CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
+  logStep("Function invoked", { method: req.method, url: req.url });
+
   try {
-    logStep("Function started");
+    // Environment variables check
+    logStep("Checking environment variables");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
-    // Test Supabase client creation
+    if (!supabaseUrl || !supabaseKey) {
+      logStep("ERROR: Missing Supabase environment variables");
+      throw new Error("Missing Supabase configuration");
+    }
+
+    if (!stripeKey) {
+      logStep("ERROR: Missing Stripe secret key");
+      throw new Error("Missing Stripe secret key");
+    }
+
+    logStep("Environment variables OK");
+
+    // Create Supabase client
     logStep("Creating Supabase client");
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-    );
-    logStep("Supabase client created successfully");
+    const supabaseClient = createClient(supabaseUrl, supabaseKey);
+    logStep("Supabase client created");
 
-    // Test auth header extraction
-    logStep("Checking authorization header");
+    // Get authorization header
+    logStep("Checking authorization");
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      logStep("ERROR: No authorization header provided");
+      logStep("ERROR: No authorization header");
       throw new Error("No authorization header provided");
     }
-    logStep("Authorization header found", { headerLength: authHeader.length });
-    
-    // Test token extraction
+
     const token = authHeader.replace("Bearer ", "");
     logStep("Token extracted", { tokenLength: token.length });
 
-    // Test user authentication - THIS IS WHERE IT MIGHT BE HANGING
-    logStep("About to call supabaseClient.auth.getUser");
-    const startTime = Date.now();
+    // Authenticate user
+    logStep("Authenticating user");
+    const { data, error: authError } = await supabaseClient.auth.getUser(token);
     
-    const { data } = await supabaseClient.auth.getUser(token);
-    const authTime = Date.now() - startTime;
-    logStep("Auth call completed", { timeMs: authTime });
-    
+    if (authError) {
+      logStep("ERROR: Authentication failed", { error: authError.message });
+      throw new Error(`Authentication failed: ${authError.message}`);
+    }
+
     const user = data.user;
     if (!user?.email) {
-      logStep("ERROR: User not authenticated or email not available");
+      logStep("ERROR: No user or email");
       throw new Error("User not authenticated or email not available");
     }
+
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Test request body parsing
-    logStep("About to parse request body");
-    let requestBody;
-    try {
-      const bodyText = await req.text();
-      logStep("Request body received", { bodyLength: bodyText.length });
-      
-      if (!bodyText || bodyText.trim() === '') {
-        throw new Error("Empty request body");
-      }
-      
-      requestBody = JSON.parse(bodyText);
-      logStep("Request body parsed successfully", requestBody);
-    } catch (parseError) {
-      logStep("JSON parsing error", { error: parseError.message });
-      throw new Error("Invalid JSON in request body");
-    }
+    // Parse request body
+    logStep("Parsing request body");
+    const requestBody = await req.json();
+    logStep("Request body parsed", requestBody);
 
     const { priceId, planName } = requestBody;
     if (!priceId || !planName) {
-      logStep("ERROR: Missing priceId or planName");
+      logStep("ERROR: Missing required fields");
       throw new Error("Missing priceId or planName");
     }
-    logStep("Request data validated", { priceId, planName });
 
-    // Test Stripe key retrieval
-    logStep("Checking Stripe secret key");
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) {
-      logStep("ERROR: STRIPE_SECRET_KEY not found");
-      throw new Error("STRIPE_SECRET_KEY is not configured");
-    }
-    
-    if (!stripeKey.startsWith('sk_')) {
-      logStep("ERROR: Invalid Stripe key format", { keyPrefix: stripeKey.substring(0, 10) });
-      throw new Error("Invalid Stripe secret key format");
-    }
+    // Initialize Stripe
+    logStep("Initializing Stripe");
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    logStep("Stripe initialized");
 
-    logStep("Stripe key validated", { keyPrefix: stripeKey.substring(0, 10) });
-
-    // Test Stripe client creation
-    logStep("Creating Stripe client");
-    const stripe = new Stripe(stripeKey, { 
-      apiVersion: "2023-10-16" 
+    // Check for existing customer
+    logStep("Checking for existing customer");
+    const customers = await stripe.customers.list({ 
+      email: user.email, 
+      limit: 1 
     });
-    logStep("Stripe client created successfully");
+    logStep("Customer search completed", { customersFound: customers.data.length });
 
-    // Test customer lookup - THIS MIGHT ALSO HANG
-    logStep("About to search for existing customer");
-    const customerStartTime = Date.now();
-    
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    const customerTime = Date.now() - customerStartTime;
-    logStep("Customer search completed", { timeMs: customerTime, customersFound: customers.data.length });
-    
     let customerId;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
@@ -120,11 +107,11 @@ serve(async (req) => {
       logStep("No existing customer found");
     }
 
-    // Test session creation - THIS IS MOST LIKELY TO HANG
+    // Get origin for redirect URLs
     const origin = req.headers.get("origin") || "https://www.opobots.com";
-    logStep("About to create Stripe checkout session", { origin, customerId, priceId });
-    
-    const sessionStartTime = Date.now();
+    logStep("Creating checkout session", { origin, customerId, priceId });
+
+    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
@@ -142,21 +129,24 @@ serve(async (req) => {
         plan_name: planName,
       },
     });
-    const sessionTime = Date.now() - sessionStartTime;
 
     logStep("Checkout session created successfully", { 
       sessionId: session.id, 
-      url: session.url,
-      timeMs: sessionTime 
+      url: session.url 
     });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
+
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in create-checkout", { message: errorMessage, stack: error instanceof Error ? error.stack : 'No stack' });
+    logStep("ERROR occurred", { 
+      message: errorMessage, 
+      stack: error instanceof Error ? error.stack : 'No stack available' 
+    });
+    
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
