@@ -9,10 +9,11 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRouteProps) => {
-  const { user, loading } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { subscribed, loading: subscriptionLoading } = useSubscription();
 
-  if (loading || subscriptionLoading) {
+  // Show loading while auth or subscription is loading
+  if (authLoading || (user && subscriptionLoading)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -25,10 +26,12 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
     );
   }
 
+  // If no user and auth is required
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
 
+  // If subscription is required but user is not subscribed
   if (requireSubscription && !subscribed) {
     return <Navigate to="/?subscription_required=true" replace />;
   }
