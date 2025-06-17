@@ -67,6 +67,12 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (priceId: string, planName: string) => {
+    console.log('=== INICIO createCheckoutSession ===');
+    console.log('priceId:', priceId);
+    console.log('planName:', planName);
+    console.log('user:', user);
+    console.log('session:', session);
+    
     // Si no hay usuario autenticado, redirigir directamente al registro
     if (!user || !session || !validateSession(session)) {
       console.log('No user or session found, redirecting to registration');
@@ -81,6 +87,7 @@ export const useSubscription = () => {
 
     // Validate inputs
     if (!priceId || typeof priceId !== 'string' || priceId.length > 100) {
+      console.error('Invalid priceId:', priceId);
       toast({
         title: "Error",
         description: "Información del plan no válida",
@@ -90,6 +97,7 @@ export const useSubscription = () => {
     }
 
     if (!planName || typeof planName !== 'string' || planName.length > 50) {
+      console.error('Invalid planName:', planName);
       toast({
         title: "Error",
         description: "Nombre del plan no válido",
@@ -99,11 +107,16 @@ export const useSubscription = () => {
     }
 
     setLoading(true);
+    console.log('Loading set to true');
 
     try {
+      console.log('=== ANTES DE LLAMAR A create-checkout ===');
       console.log('Creating checkout session for:', { priceId, planName, userId: user.id });
+      console.log('Session access token exists:', !!session.access_token);
+      console.log('Session access token length:', session.access_token?.length);
       
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
+      console.log('=== LLAMANDO A supabase.functions.invoke ===');
+      const invokeResult = await supabase.functions.invoke('create-checkout', {
         body: { 
           priceId: priceId.trim(), 
           planName: planName.trim() 
@@ -114,14 +127,23 @@ export const useSubscription = () => {
         },
       });
 
-      console.log('Checkout response:', { data, error });
+      console.log('=== RESPUESTA DE create-checkout ===');
+      console.log('invokeResult:', invokeResult);
+      console.log('invokeResult.data:', invokeResult.data);
+      console.log('invokeResult.error:', invokeResult.error);
+
+      const { data, error } = invokeResult;
 
       if (error) {
-        console.error('Checkout creation error:', error);
+        console.error('=== ERROR EN create-checkout ===');
+        console.error('Error object:', error);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
         throw new Error(`Failed to create checkout session: ${error.message || 'Unknown error'}`);
       }
 
       if (!data || !data.url || typeof data.url !== 'string') {
+        console.error('=== DATOS INVÁLIDOS ===');
         console.error('Invalid response data:', data);
         throw new Error('Invalid checkout URL received from server');
       }
@@ -129,20 +151,25 @@ export const useSubscription = () => {
       // Validate URL before opening
       try {
         const url = new URL(data.url);
+        console.log('=== URL VALIDADA ===');
+        console.log('URL hostname:', url.hostname);
         if (!url.hostname.includes('checkout.stripe.com')) {
           throw new Error('Invalid checkout URL domain');
         }
       } catch (urlError) {
+        console.error('=== ERROR DE VALIDACIÓN DE URL ===');
         console.error('URL validation error:', urlError);
         throw new Error('Invalid checkout URL format');
       }
 
+      console.log('=== REDIRIGIENDO A STRIPE ===');
       console.log('Redirecting to Stripe checkout:', data.url);
       
       // Redirect to Stripe checkout (not open in new tab to avoid popups)
       window.location.href = data.url;
       
     } catch (error) {
+      console.error('=== ERROR FINAL ===');
       console.error('Error creating checkout session:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       toast({
@@ -151,6 +178,7 @@ export const useSubscription = () => {
         variant: "destructive",
       });
     } finally {
+      console.log('=== FINALIZANDO - Setting loading to false ===');
       setLoading(false);
     }
   };
