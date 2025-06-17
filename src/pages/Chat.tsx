@@ -5,7 +5,7 @@ import ChatInterface from '@/components/ChatInterface';
 
 const Chat = () => {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireSubscription={true}>
       <div className="w-full min-h-screen bg-[#f7f7fb] flex flex-col">
         <ChatInterface />
       </div>

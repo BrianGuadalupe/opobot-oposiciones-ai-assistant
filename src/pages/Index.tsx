@@ -1,3 +1,6 @@
+
+import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
@@ -5,8 +8,23 @@ import Pricing from "@/components/Pricing";
 import Testimonials from "@/components/Testimonials";
 import Footer from "@/components/Footer";
 import ChatDemoExample from "@/components/ChatDemoExample";
+import SubscriptionRequired from "@/components/SubscriptionRequired";
 
 const Index = () => {
+  const [searchParams] = useSearchParams();
+  const [showSubscriptionRequired, setShowSubscriptionRequired] = useState(false);
+
+  useEffect(() => {
+    const subscriptionRequired = searchParams.get('subscription_required');
+    if (subscriptionRequired === 'true') {
+      setShowSubscriptionRequired(true);
+    }
+  }, [searchParams]);
+
+  if (showSubscriptionRequired) {
+    return <SubscriptionRequired />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />

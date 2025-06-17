@@ -30,7 +30,7 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
   }
 
   if (requireSubscription && !subscribed) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/?subscription_required=true" replace />;
   }
 
   return <>{children}</>;
