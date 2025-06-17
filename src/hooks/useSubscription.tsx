@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -139,7 +140,7 @@ export const useSubscription = () => {
 
       console.log('Redirecting to Stripe checkout:', data.url);
       
-      // Redirect to Stripe checkout
+      // Redirect to Stripe checkout (not open in new tab to avoid popups)
       window.location.href = data.url;
       
     } catch (error) {

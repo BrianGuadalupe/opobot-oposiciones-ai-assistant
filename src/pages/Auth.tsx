@@ -32,6 +32,12 @@ const Auth = () => {
   useEffect(() => {
     // Cambia el modo de login/register en función del parámetro cada vez que cambia la URL
     setIsLogin(queryMode !== "register");
+    
+    // Mostrar mensaje de confirmación si viene del registro
+    if (queryMode === "confirm_email") {
+      setShowEmailConfirmMessage(true);
+      setIsLogin(true);
+    }
   }, [queryMode]);
 
   useEffect(() => {
@@ -44,7 +50,6 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setShowEmailConfirmMessage(false);
 
     try {
       if (isLogin) {
@@ -67,8 +72,8 @@ const Auth = () => {
             setError(error.message);
           }
         } else {
-          setShowEmailConfirmMessage(true);
-          setError('');
+          // Redirigir a la página de login con mensaje de confirmación
+          navigate('/auth?mode=confirm_email');
         }
       }
     } catch (err) {
@@ -95,13 +100,13 @@ const Auth = () => {
 
           {showEmailConfirmMessage && (
             <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="font-semibold text-green-800 mb-2">¡Cuenta creada!</h3>
+              <h3 className="font-semibold text-green-800 mb-2">¡Cuenta creada correctamente!</h3>
               <p className="text-green-700 text-sm">
-                Te hemos enviado un email de confirmación a <strong>{email}</strong>. 
-                Por favor, revisa tu bandeja de entrada y haz clic en el enlace para confirmar tu cuenta.
+                Te hemos enviado un email de confirmación. Por favor, revisa tu bandeja de entrada 
+                y haz clic en el enlace <strong>"Confirmar"</strong> para activar tu cuenta.
               </p>
               <p className="text-green-600 text-xs mt-2">
-                Una vez confirmada, podrás iniciar sesión y proceder con tu suscripción.
+                Una vez confirmada, podrás iniciar sesión aquí y proceder con tu suscripción.
               </p>
             </div>
           )}
