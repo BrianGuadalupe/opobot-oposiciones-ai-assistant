@@ -102,15 +102,28 @@ export const useSubscription = () => {
       console.log('Function name: create-checkout');
       console.log('Request body:', { planName });
       
-      const response = await supabase.functions.invoke('create-checkout', {
+      // Create a promise with timeout
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Function call timeout after 30 seconds')), 30000)
+      );
+
+      console.log('=== MAKING SUPABASE INVOKE CALL ===');
+      
+      const invokePromise = supabase.functions.invoke('create-checkout', {
         body: { planName: planName.trim() },
         headers: {
           'Content-Type': 'application/json',
         },
       });
+
+      console.log('=== WAITING FOR RESPONSE ===');
+      
+      const response = await Promise.race([invokePromise, timeoutPromise]) as any;
       
       console.log('=== RESPONSE RECEIVED ===');
-      console.log('Response:', response);
+      console.log('Response status:', response?.status);
+      console.log('Response error:', response?.error);
+      console.log('Response data:', response?.data);
 
       if (response.error) {
         console.error('Edge function error:', response.error);
@@ -131,7 +144,9 @@ export const useSubscription = () => {
       
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
-      console.error('Error:', error);
+      console.error('Error type:', error?.constructor?.name);
+      console.error('Error message:', error instanceof Error ? error.message : String(error));
+      console.error('Full error:', error);
       
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
