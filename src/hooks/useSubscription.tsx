@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -98,40 +97,62 @@ export const useSubscription = () => {
     setLoading(true);
 
     try {
-      console.log('Creating checkout session for:', { priceId, planName });
+      console.log('Creating checkout session for:', { priceId, planName, userId: user.id });
       
       const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { priceId, planName },
+        body: { 
+          priceId: priceId.trim(), 
+          planName: planName.trim() 
+        },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
       });
 
+      console.log('Checkout response:', { data, error });
+
       if (error) {
         console.error('Checkout creation error:', error);
-        throw new Error('Failed to create checkout session');
+        throw new Error(`Failed to create checkout session: ${error.message || 'Unknown error'}`);
       }
 
-      if (!data?.url || typeof data.url !== 'string') {
-        throw new Error('Invalid checkout URL received');
+      if (!data || !data.url || typeof data.url !== 'string') {
+        console.error('Invalid response data:', data);
+        throw new Error('Invalid checkout URL received from server');
       }
 
       // Validate URL before opening
       try {
-        new URL(data.url);
-      } catch {
+        const url = new URL(data.url);
+        if (!url.hostname.includes('checkout.stripe.com')) {
+          throw new Error('Invalid checkout URL domain');
+        }
+      } catch (urlError) {
+        console.error('URL validation error:', urlError);
         throw new Error('Invalid checkout URL format');
       }
 
       console.log('Redirecting to Stripe checkout:', data.url);
-      // Redirect to Stripe checkout
-      window.location.href = data.url;
+      
+      // Small delay to ensure state updates, then redirect
+      setTimeout(() => {
+        window.location.href = data.url;
+      }, 100);
+      
     } catch (error) {
       console.error('Error creating checkout session:', error);
-      handleSecureError(error, 'No se pudo iniciar el proceso de pago');
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      toast({
+        title: "Error de Pago",
+        description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
+        variant: "destructive",
+      });
     } finally {
-      setLoading(false);
+      // Keep loading state for a bit longer to prevent button flickering
+      setTimeout(() => {
+        setLoading(false);
+      }, 500);
     }
   };
 
