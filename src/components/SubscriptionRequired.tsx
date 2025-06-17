@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Star, ArrowRight, CheckCircle, CreditCard } from "lucide-react";
+import { Lock, Star, CheckCircle, CreditCard } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -39,11 +39,16 @@ const SubscriptionRequired = () => {
   ];
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
+    console.log('Subscribe button clicked for plan:', plan.name);
+    console.log('User authenticated:', !!user);
+    
     if (!user) {
-      // Redirigir a la página de registro directamente
+      console.log('No user found, redirecting to registration');
       window.location.href = '/auth?mode=register';
       return;
     }
+    
+    console.log('Calling createCheckoutSession with:', { priceId: plan.priceId, planName: plan.name });
     await createCheckoutSession(plan.priceId, plan.name);
   };
 
