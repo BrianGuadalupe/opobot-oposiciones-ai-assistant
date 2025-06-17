@@ -114,9 +114,17 @@ export const useSubscription = () => {
       console.log('Creating checkout session for:', { priceId, planName, userId: user.id });
       console.log('Session access token exists:', !!session.access_token);
       console.log('Session access token length:', session.access_token?.length);
+      console.log('Supabase URL:', supabase.supabaseUrl);
+      console.log('Supabase Key (primeros 10 chars):', supabase.supabaseKey.substring(0, 10));
       
       console.log('=== LLAMANDO A supabase.functions.invoke ===');
-      const invokeResult = await supabase.functions.invoke('create-checkout', {
+      
+      // Add timeout to the invoke call
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout: La función tardó más de 30 segundos')), 30000);
+      });
+
+      const invokePromise = supabase.functions.invoke('create-checkout', {
         body: { 
           priceId: priceId.trim(), 
           planName: planName.trim() 
@@ -126,6 +134,9 @@ export const useSubscription = () => {
           'Content-Type': 'application/json',
         },
       });
+
+      console.log('=== Esperando respuesta con timeout de 30s ===');
+      const invokeResult = await Promise.race([invokePromise, timeoutPromise]);
 
       console.log('=== RESPUESTA DE create-checkout ===');
       console.log('invokeResult:', invokeResult);
@@ -172,11 +183,21 @@ export const useSubscription = () => {
       console.error('=== ERROR FINAL ===');
       console.error('Error creating checkout session:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      toast({
-        title: "Error de Pago",
-        description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
-        variant: "destructive",
-      });
+      
+      // Show more detailed error information
+      if (errorMessage.includes('Timeout')) {
+        toast({
+          title: "Error de Conexión",
+          description: "La solicitud tardó demasiado tiempo. Por favor, verifica tu conexión a internet e intenta de nuevo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error de Pago",
+          description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
+          variant: "destructive",
+        });
+      }
     } finally {
       console.log('=== FINALIZANDO - Setting loading to false ===');
       setLoading(false);
