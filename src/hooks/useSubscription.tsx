@@ -67,16 +67,15 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (priceId: string, planName: string) => {
+    // Si no hay usuario autenticado, redirigir directamente al registro
     if (!user || !session || !validateSession(session)) {
-      console.log('No user or session found, redirecting to auth');
+      console.log('No user or session found, redirecting to registration');
       toast({
-        title: "Inicia sesión",
-        description: "Necesitas iniciar sesión para suscribirte. Te redirigiremos a la página de registro.",
+        title: "Regístrate",
+        description: "Necesitas registrarte para suscribirte. Te redirigiremos a la página de registro.",
       });
-      // Esperar un momento antes de redirigir para que el usuario vea el mensaje
-      setTimeout(() => {
-        window.location.href = '/auth?mode=register';
-      }, 1000);
+      // Redirigir inmediatamente sin intentar hacer login
+      window.location.href = '/auth?mode=register';
       return;
     }
 
