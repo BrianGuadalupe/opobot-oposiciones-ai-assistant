@@ -84,6 +84,7 @@ const ResetPasswordForm = () => {
               required
               placeholder="••••••••"
               minLength={8}
+              autoComplete="new-password"
             />
             {password && (
               <div className="mt-1">
@@ -111,6 +112,7 @@ const ResetPasswordForm = () => {
               required
               placeholder="••••••••"
               minLength={8}
+              autoComplete="new-password"
             />
           </div>
 

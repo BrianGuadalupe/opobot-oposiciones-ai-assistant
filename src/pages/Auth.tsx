@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,6 +121,7 @@ const Auth = () => {
                   onChange={(e) => setFullName(e.target.value)}
                   required={!isLogin}
                   placeholder="Tu nombre completo"
+                  autoComplete="name"
                 />
               </div>
             )}
@@ -135,6 +135,7 @@ const Auth = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="tu@email.com"
+                autoComplete="email"
               />
             </div>
 
@@ -148,6 +149,7 @@ const Auth = () => {
                 required
                 placeholder="••••••••"
                 minLength={6}
+                autoComplete={isLogin ? "current-password" : "new-password"}
               />
             </div>
 

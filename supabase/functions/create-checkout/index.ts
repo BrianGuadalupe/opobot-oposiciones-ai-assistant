@@ -3,11 +3,13 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+// CORS headers for browser requests
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Logger with timestamps
 const logStep = (step: string, details?: any) => {
   const timestamp = new Date().toISOString();
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -21,13 +23,20 @@ const PLAN_MAPPING = {
 };
 
 serve(async (req) => {
+  // Cronometro para medir tiempo de ejecución
+  const startTime = Date.now();
+  const timeTracker = {
+    start: startTime,
+    current: () => Date.now() - startTime
+  };
+
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    logStep("CORS preflight request handled");
+    logStep(`CORS preflight request handled in ${timeTracker.current()}ms`);
     return new Response(null, { headers: corsHeaders });
   }
 
-  logStep("=== FUNCTION STARTED ===");
+  logStep(`=== FUNCTION STARTED ===`);
   
   try {
     // Environment variables check
@@ -35,7 +44,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
 
-    logStep("Environment check", {
+    logStep(`Environment check at ${timeTracker.current()}ms`, {
       supabaseUrl: supabaseUrl ? "present" : "missing",
       supabaseKey: supabaseKey ? "present" : "missing", 
       stripeKey: stripeKey ? "present" : "missing"
@@ -62,13 +71,14 @@ serve(async (req) => {
     }
 
     // Create Supabase client
+    logStep(`Creating Supabase client at ${timeTracker.current()}ms`);
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
-    logStep("Supabase client created");
+    logStep(`Supabase client created at ${timeTracker.current()}ms`);
 
     // Get authorization header
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      logStep("ERROR: No authorization header");
+      logStep(`ERROR: No authorization header at ${timeTracker.current()}ms`);
       return new Response(JSON.stringify({ 
         error: "No authorization header provided"
       }), {
@@ -78,25 +88,25 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    logStep("Token extracted", { tokenLength: token.length });
+    logStep(`Token extracted at ${timeTracker.current()}ms`, { tokenLength: token.length });
 
     // Authenticate user
-    logStep("=== AUTHENTICATING USER ===");
-    const { data, error: authError } = await supabaseClient.auth.getUser(token);
+    logStep(`=== AUTHENTICATING USER at ${timeTracker.current()}ms ===`);
+    const authResponse = await supabaseClient.auth.getUser(token);
     
-    if (authError) {
-      logStep("ERROR: Authentication failed", { error: authError.message });
+    if (authResponse.error) {
+      logStep(`ERROR: Authentication failed at ${timeTracker.current()}ms`, { error: authResponse.error.message });
       return new Response(JSON.stringify({ 
-        error: `Authentication failed: ${authError.message}`
+        error: `Authentication failed: ${authResponse.error.message}`
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 401,
       });
     }
 
-    const user = data.user;
+    const user = authResponse.data.user;
     if (!user?.email) {
-      logStep("ERROR: No user or email");
+      logStep(`ERROR: No user or email at ${timeTracker.current()}ms`);
       return new Response(JSON.stringify({ 
         error: "User not authenticated or email not available"
       }), {
@@ -105,26 +115,28 @@ serve(async (req) => {
       });
     }
 
-    logStep("User authenticated successfully", { 
+    logStep(`User authenticated successfully at ${timeTracker.current()}ms`, { 
       userId: user.id, 
       email: user.email.substring(0, 3) + "***"
     });
 
     // Parse request body
-    logStep("=== PARSING REQUEST BODY ===");
+    logStep(`=== PARSING REQUEST BODY at ${timeTracker.current()}ms ===`);
     let requestBody;
     try {
       const bodyText = await req.text();
-      logStep("Raw body received", { bodyLength: bodyText.length });
+      logStep(`Raw body received at ${timeTracker.current()}ms`, { bodyLength: bodyText.length });
       
       if (!bodyText) {
         throw new Error("Empty request body");
       }
       
       requestBody = JSON.parse(bodyText);
-      logStep("Request body parsed", { keys: Object.keys(requestBody) });
+      logStep(`Request body parsed at ${timeTracker.current()}ms`, { keys: Object.keys(requestBody) });
     } catch (parseError) {
-      logStep("ERROR: Failed to parse request body", { error: parseError.message });
+      logStep(`ERROR: Failed to parse request body at ${timeTracker.current()}ms`, { 
+        error: parseError instanceof Error ? parseError.message : String(parseError) 
+      });
       return new Response(JSON.stringify({ 
         error: "Invalid request body"
       }), {
@@ -135,7 +147,7 @@ serve(async (req) => {
 
     const { planName } = requestBody;
     if (!planName || typeof planName !== 'string') {
-      logStep("ERROR: Missing or invalid planName", { planName });
+      logStep(`ERROR: Missing or invalid planName at ${timeTracker.current()}ms`, { planName });
       return new Response(JSON.stringify({ 
         error: "Missing or invalid planName"
       }), {
@@ -147,7 +159,10 @@ serve(async (req) => {
     // Securely map planName to priceId on server side
     const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
     if (!priceId) {
-      logStep("ERROR: Invalid plan name", { planName, availablePlans: Object.keys(PLAN_MAPPING) });
+      logStep(`ERROR: Invalid plan name at ${timeTracker.current()}ms`, { 
+        planName, 
+        availablePlans: Object.keys(PLAN_MAPPING) 
+      });
       return new Response(JSON.stringify({ 
         error: "Invalid plan name"
       }), {
@@ -156,71 +171,83 @@ serve(async (req) => {
       });
     }
 
-    logStep("Plan mapped successfully", { planName, priceId });
+    logStep(`Plan mapped successfully at ${timeTracker.current()}ms`, { planName, priceId });
 
     // Initialize Stripe
-    logStep("=== INITIALIZING STRIPE ===");
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    try {
+      logStep(`=== INITIALIZING STRIPE at ${timeTracker.current()}ms ===`);
+      const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+      logStep(`Stripe initialized at ${timeTracker.current()}ms`);
+      
+      // Check for existing customer
+      logStep(`=== CHECKING FOR EXISTING CUSTOMER at ${timeTracker.current()}ms ===`);
+      const customers = await stripe.customers.list({ 
+        email: user.email, 
+        limit: 1 
+      });
+      logStep(`Customer search completed at ${timeTracker.current()}ms`, { customersFound: customers.data.length });
 
-    // Check for existing customer
-    logStep("=== CHECKING FOR EXISTING CUSTOMER ===");
-    const customers = await stripe.customers.list({ 
-      email: user.email, 
-      limit: 1 
-    });
-    logStep("Customer search completed", { customersFound: customers.data.length });
+      let customerId;
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep(`Existing customer found at ${timeTracker.current()}ms`, { customerId });
+      } else {
+        logStep(`No existing customer found at ${timeTracker.current()}ms, will create new one during checkout`);
+      }
 
-    let customerId;
-    if (customers.data.length > 0) {
-      customerId = customers.data[0].id;
-      logStep("Existing customer found", { customerId });
-    } else {
-      logStep("No existing customer found, will create new one during checkout");
-    }
+      // Get origin for redirect URLs
+      const origin = req.headers.get("origin") || "https://www.opobots.com";
+      logStep(`=== CREATING CHECKOUT SESSION at ${timeTracker.current()}ms ===`, { 
+        origin, 
+        customerId: customerId ? "present" : "will_create", 
+        priceId, 
+        planName 
+      });
 
-    // Get origin for redirect URLs
-    const origin = req.headers.get("origin") || "https://www.opobots.com";
-    logStep("=== CREATING CHECKOUT SESSION ===", { 
-      origin, 
-      customerId: customerId ? "present" : "will_create", 
-      priceId, 
-      planName 
-    });
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      customer_email: customerId ? undefined : user.email,
-      line_items: [
-        {
-          price: priceId,
-          quantity: 1,
+      // Create checkout session
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        customer_email: customerId ? undefined : user.email,
+        line_items: [
+          {
+            price: priceId,
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/?canceled=true`,
+        metadata: {
+          user_id: user.id,
+          plan_name: planName,
         },
-      ],
-      mode: "subscription",
-      success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/?canceled=true`,
-      metadata: {
-        user_id: user.id,
-        plan_name: planName,
-      },
-    });
+      });
 
-    logStep("=== CHECKOUT SESSION CREATED SUCCESSFULLY ===", { 
-      sessionId: session.id, 
-      url: session.url ? "present" : "missing"
-    });
+      logStep(`=== CHECKOUT SESSION CREATED SUCCESSFULLY at ${timeTracker.current()}ms ===`, { 
+        sessionId: session.id, 
+        url: session.url ? "present" : "missing"
+      });
 
-    return new Response(JSON.stringify({ url: session.url }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
-    });
-
+      return new Response(JSON.stringify({ url: session.url }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    } catch (stripeError) {
+      logStep(`=== STRIPE ERROR at ${timeTracker.current()}ms ===`, { 
+        error: stripeError instanceof Error ? stripeError.message : String(stripeError)  
+      });
+      return new Response(JSON.stringify({ 
+        error: stripeError instanceof Error ? stripeError.message : "Stripe error occurred"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     const stack = error instanceof Error ? error.stack : 'No stack available';
     
-    logStep("=== CRITICAL ERROR OCCURRED ===", { 
+    logStep(`=== CRITICAL ERROR OCCURRED at ${timeTracker.current()}ms ===`, { 
       message: errorMessage,
       type: error?.constructor?.name || 'Unknown',
       stack: stack?.split('\n').slice(0, 3).join('\n')

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -99,27 +100,36 @@ export const useSubscription = () => {
       console.log('Enviando solo planName:', planName);
       console.log('Session access token exists:', !!session.access_token);
       
-      // Solo enviamos planName - el priceId se mapea en el servidor
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { 
-          planName: planName.trim()
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+      // Verificar las cabeceras de la llamada a la API
+      const headers = {
+        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      };
+      console.log('Headers para petición:', Object.keys(headers));
+      
+      // Preparar el body para debugging
+      const body = { planName: planName.trim() };
+      console.log('Body para petición:', body);
+      
+      // Realizar la petición con mejor manejo de errores
+      const response = await supabase.functions.invoke('create-checkout', {
+        body: body,
+        headers: headers,
+      }).catch(error => {
+        console.error('Error en invoke de create-checkout:', error);
+        throw new Error(`Error en invocación de la función: ${error.message || 'Error desconocido'}`);
       });
-
+      
       console.log('=== RESPUESTA DE create-checkout ===');
-      console.log('data:', data);
-      console.log('error:', error);
-
-      if (error) {
+      console.log('response completa:', response);
+      
+      if (response.error) {
         console.error('=== ERROR EN create-checkout ===');
-        console.error('Error object:', error);
-        throw new Error(`Error en checkout: ${error.message || 'Error desconocido'}`);
+        console.error('Error object:', response.error);
+        throw new Error(`Error en checkout: ${response.error.message || 'Error desconocido'}`);
       }
 
+      const data = response.data;
       if (!data) {
         console.error('=== NO DATA RECEIVED ===');
         throw new Error('No se recibió respuesta del servidor');
