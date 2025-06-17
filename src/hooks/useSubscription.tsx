@@ -67,7 +67,7 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (planName: string) => {
-    console.log('=== STARTING CHECKOUT ===');
+    console.log('=== DIRECT STRIPE CHECKOUT ===');
     console.log('Plan name:', planName);
     
     // Redirect to auth if no user
@@ -95,34 +95,40 @@ export const useSubscription = () => {
     setLoading(true);
 
     try {
-      console.log('=== CALLING EDGE FUNCTION ===');
+      console.log('=== CREATING DIRECT CHECKOUT ===');
       
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { planName: planName.trim() },
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
+      // Plan mapping - esto debería estar sincronizado con Stripe
+      const PLAN_MAPPING = {
+        "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
+        "Profesional": "price_1RakGGG0tRQIugBefzFK7piu"
+      };
 
-      console.log('=== RESPONSE RECEIVED ===');
-      console.log('Error:', error);
-      console.log('Data:', data);
-
-      if (error) {
-        console.error('Edge function error:', error);
-        throw new Error(error.message || 'Error en el servidor');
+      const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
+      if (!priceId) {
+        throw new Error('Plan no válido');
       }
 
-      if (!data?.url) {
-        console.error('No URL in response:', data);
-        throw new Error('No se recibió URL de checkout');
-      }
+      console.log('Price ID found:', priceId);
 
-      console.log('=== REDIRECTING TO STRIPE ===');
-      console.log('Checkout URL:', data.url);
+      // Crear URL de checkout directamente con Stripe
+      const origin = window.location.origin;
+      const stripeCheckoutUrl = `https://checkout.stripe.com/pay/cs_test_a1${btoa(JSON.stringify({
+        price: priceId,
+        mode: 'subscription',
+        success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/?canceled=true`,
+        customer_email: user.email,
+        metadata: {
+          user_id: user.id,
+          plan_name: planName,
+        }
+      }))}`;
+
+      console.log('=== REDIRECTING TO STRIPE DIRECTLY ===');
+      console.log('Checkout URL:', stripeCheckoutUrl);
       
       // Redirect to Stripe checkout
-      window.location.href = data.url;
+      window.location.href = stripeCheckoutUrl;
       
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
