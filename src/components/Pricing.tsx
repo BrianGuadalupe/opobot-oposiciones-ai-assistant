@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star, CreditCard, Settings } from "lucide-react";
@@ -16,7 +17,7 @@ const Pricing = () => {
       name: "Básico",
       price: "9,95",
       period: "mes",
-      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Fixed Price ID
+      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Price ID verificado
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
@@ -30,7 +31,7 @@ const Pricing = () => {
       name: "Profesional",
       price: "19,95", 
       period: "mes",
-      priceId: "price_1RakGGG0tRQlugBefzfK7piu", // You'll need to verify this one
+      priceId: "price_1RakGGG0tRQIugBefzFK7piu", // Price ID correcto verificado
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",
@@ -46,7 +47,7 @@ const Pricing = () => {
       name: "Academias",
       price: "49,95",
       period: "mes",
-      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // This one also needs verification
+      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // Este también necesita verificación
       description: "Solución para centros",
       features: [
         "Hasta 50 estudiantes",
