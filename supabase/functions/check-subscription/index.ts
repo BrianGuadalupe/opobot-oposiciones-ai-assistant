@@ -35,8 +35,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Only allow POST requests
-  if (req.method !== "POST") {
+  // Accept both GET and POST requests
+  if (req.method !== "POST" && req.method !== "GET") {
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 405,
@@ -87,10 +87,6 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
     
-    // Rate limiting check - limit to 10 requests per minute per user
-    const rateLimitKey = `check_subscription_${user.id}`;
-    // Note: In production, implement proper rate limiting with Redis or similar
-
     const customers = await stripe.customers.list({ 
       email: user.email, 
       limit: 1,

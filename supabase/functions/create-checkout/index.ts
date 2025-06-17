@@ -35,7 +35,23 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    const { priceId, planName } = await req.json();
+    // Parse JSON body safely
+    let requestBody;
+    try {
+      const bodyText = await req.text();
+      logStep("Request body received", { bodyLength: bodyText.length });
+      
+      if (!bodyText || bodyText.trim() === '') {
+        throw new Error("Empty request body");
+      }
+      
+      requestBody = JSON.parse(bodyText);
+    } catch (parseError) {
+      logStep("JSON parsing error", { error: parseError.message });
+      throw new Error("Invalid JSON in request body");
+    }
+
+    const { priceId, planName } = requestBody;
     if (!priceId || !planName) throw new Error("Missing priceId or planName");
     logStep("Request data", { priceId, planName });
 
@@ -53,7 +69,7 @@ serve(async (req) => {
       logStep("No existing customer found");
     }
 
-    const origin = req.headers.get("origin") || "http://localhost:3000";
+    const origin = req.headers.get("origin") || "https://www.opobots.com";
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,

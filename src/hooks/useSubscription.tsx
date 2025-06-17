@@ -119,8 +119,8 @@ export const useSubscription = () => {
         throw new Error('Invalid checkout URL format');
       }
 
-      // Open Stripe checkout in a new tab
-      window.open(data.url, '_blank', 'noopener,noreferrer');
+      // Redirect to Stripe checkout
+      window.location.href = data.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);
       handleSecureError(error, 'No se pudo iniciar el proceso de pago');
