@@ -173,8 +173,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       if (error) {
         console.error('Signin error:', error);
-        // Don't expose whether user exists or not
-        return { error: { message: 'Email o contraseña incorrectos' } };
+        // Return specific error messages to help users
+        if (error.message.includes('Email not confirmed')) {
+          return { error: { message: 'Email not confirmed' } };
+        } else if (error.message.includes('Invalid login credentials')) {
+          return { error: { message: 'Invalid login credentials' } };
+        } else {
+          return { error: { message: 'Error al iniciar sesión' } };
+        }
       }
 
       return { error: null };

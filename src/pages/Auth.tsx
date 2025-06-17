@@ -25,6 +25,7 @@ const Auth = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [showEmailConfirmMessage, setShowEmailConfirmMessage] = useState(false);
   const { signIn, signUp, user } = useAuth();
   const navigate = useNavigate();
 
@@ -43,19 +44,31 @@ const Auth = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setShowEmailConfirmMessage(false);
 
     try {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) {
-          setError(error.message);
+          if (error.message.includes('Email not confirmed')) {
+            setError('Por favor, revisa tu email y confirma tu cuenta antes de iniciar sesión.');
+          } else if (error.message.includes('Invalid login credentials')) {
+            setError('Email o contraseña incorrectos. Si acabas de registrarte, confirma tu email primero.');
+          } else {
+            setError(error.message);
+          }
         }
       } else {
         const { error } = await signUp(email, password, fullName);
         if (error) {
-          setError(error.message);
+          if (error.message.includes('already registered')) {
+            setError('Este email ya está registrado. Intenta iniciar sesión o confirma tu email si ya te registraste.');
+          } else {
+            setError(error.message);
+          }
         } else {
-          setError('Revisa tu email para confirmar tu cuenta');
+          setShowEmailConfirmMessage(true);
+          setError('');
         }
       }
     } catch (err) {
@@ -79,6 +92,19 @@ const Auth = () => {
           <h2 className="text-2xl font-bold text-center mb-6">
             {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </h2>
+
+          {showEmailConfirmMessage && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <h3 className="font-semibold text-green-800 mb-2">¡Cuenta creada!</h3>
+              <p className="text-green-700 text-sm">
+                Te hemos enviado un email de confirmación a <strong>{email}</strong>. 
+                Por favor, revisa tu bandeja de entrada y haz clic en el enlace para confirmar tu cuenta.
+              </p>
+              <p className="text-green-600 text-xs mt-2">
+                Una vez confirmada, podrás iniciar sesión y proceder con tu suscripción.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
@@ -150,6 +176,8 @@ const Auth = () => {
             <button
               onClick={() => {
                 setIsLogin(!isLogin);
+                setError('');
+                setShowEmailConfirmMessage(false);
                 // Cambia la URL para reflejar el modo al cambiar manualmente
                 const params = new URLSearchParams(location.search);
                 if (isLogin) {
