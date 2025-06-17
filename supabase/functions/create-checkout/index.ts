@@ -24,9 +24,16 @@ serve(async (req) => {
   }
 
   try {
-    console.log("1. Checking environment variables...");
-    
-    // Verificar variables de entorno
+    console.log("1. Checking HTTP method...");
+    if (req.method !== "POST") {
+      console.error("Invalid method:", req.method);
+      return new Response(JSON.stringify({ error: "Method not allowed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 405,
+      });
+    }
+
+    console.log("2. Checking environment variables...");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
@@ -44,15 +51,6 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
-      });
-    }
-
-    console.log("2. Checking HTTP method...");
-    if (req.method !== "POST") {
-      console.error("Invalid method:", req.method);
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 405,
       });
     }
 
