@@ -71,6 +71,8 @@ export const useSubscription = () => {
     console.log('Plan:', planName);
     console.log('User:', !!user);
     console.log('Session:', !!session);
+    console.log('User email:', user?.email);
+    console.log('Session token exists:', !!session?.access_token);
     
     // Redirect to auth if no user
     if (!user || !session || !validateSession(session)) {
@@ -99,8 +101,15 @@ export const useSubscription = () => {
     try {
       console.log('Starting checkout process...');
       console.log('=== CALLING EDGE FUNCTION ===');
+      console.log('Function name: create-checkout');
+      console.log('Request body:', { planName });
       
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
+      // Set a timeout for the function call
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Function call timeout')), 30000);
+      });
+
+      const functionPromise = supabase.functions.invoke('create-checkout', {
         body: { planName },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -108,16 +117,29 @@ export const useSubscription = () => {
         },
       });
 
+      console.log('Waiting for function response...');
+      
+      const { data, error } = await Promise.race([functionPromise, timeoutPromise]) as any;
+
       console.log('=== RESPONSE RECEIVED ===');
       console.log('Error:', error);
       console.log('Data:', data);
+      console.log('Data type:', typeof data);
+      console.log('Data keys:', data ? Object.keys(data) : 'no data');
 
       if (error) {
         console.error('Edge function error:', error);
+        console.error('Error type:', typeof error);
+        console.error('Error properties:', Object.keys(error));
         throw new Error(error.message || 'Error en el servidor');
       }
 
-      if (!data?.url) {
+      if (!data) {
+        console.error('No data received from function');
+        throw new Error('No se recibió respuesta del servidor');
+      }
+
+      if (!data.url) {
         console.error('No URL in response:', data);
         throw new Error('No se recibió URL de checkout');
       }
@@ -131,14 +153,24 @@ export const useSubscription = () => {
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
       console.error('Error:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       
-      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-      
-      toast({
-        title: "Error de Pago",
-        description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
-        variant: "destructive",
-      });
+      if (error instanceof Error && error.message === 'Function call timeout') {
+        toast({
+          title: "Timeout",
+          description: "La función tardó demasiado en responder. Por favor, inténtalo de nuevo.",
+          variant: "destructive",
+        });
+      } else {
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+        
+        toast({
+          title: "Error de Pago",
+          description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
+          variant: "destructive",
+        });
+      }
     } finally {
       console.log('=== CHECKOUT COMPLETE ===');
       setLoading(false);
