@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lock, Star, CheckCircle, CreditCard } from "lucide-react";
@@ -13,7 +12,7 @@ const SubscriptionRequired = () => {
     {
       name: "Básico",
       price: "9,95",
-      priceId: "price_1RakDbG0tRQlugBejNs3yIVA",
+      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Fixed Price ID
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
@@ -25,7 +24,7 @@ const SubscriptionRequired = () => {
     {
       name: "Profesional",
       price: "19,95",
-      priceId: "price_1RakGGG0tRQlugBefzfK7piu",
+      priceId: "price_1RakGGG0tRQlugBefzfK7piu", // You'll need to verify this one too
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",

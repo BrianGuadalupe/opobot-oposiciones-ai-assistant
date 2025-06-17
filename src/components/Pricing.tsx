@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star, CreditCard, Settings } from "lucide-react";
@@ -17,7 +16,7 @@ const Pricing = () => {
       name: "Básico",
       price: "9,95",
       period: "mes",
-      priceId: "price_1RakDbG0tRQlugBejNs3yIVA", // Price ID real de Stripe para plan Básico
+      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Fixed Price ID
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
@@ -31,7 +30,7 @@ const Pricing = () => {
       name: "Profesional",
       price: "19,95", 
       period: "mes",
-      priceId: "price_1RakGGG0tRQlugBefzfK7piu", // Price ID real de Stripe para plan Profesional
+      priceId: "price_1RakGGG0tRQlugBefzfK7piu", // You'll need to verify this one
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",
@@ -47,7 +46,7 @@ const Pricing = () => {
       name: "Academias",
       price: "49,95",
       period: "mes",
-      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // Price ID real de Stripe para plan Academias
+      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // This one also needs verification
       description: "Solución para centros",
       features: [
         "Hasta 50 estudiantes",
