@@ -114,13 +114,11 @@ export const useSubscription = () => {
       console.log('Creating checkout session for:', { priceId, planName, userId: user.id });
       console.log('Session access token exists:', !!session.access_token);
       console.log('Session access token length:', session.access_token?.length);
-      console.log('Supabase URL:', supabase.supabaseUrl);
-      console.log('Supabase Key (primeros 10 chars):', supabase.supabaseKey.substring(0, 10));
       
       console.log('=== LLAMANDO A supabase.functions.invoke ===');
       
       // Add timeout to the invoke call
-      const timeoutPromise = new Promise((_, reject) => {
+      const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Timeout: La función tardó más de 30 segundos')), 30000);
       });
 
