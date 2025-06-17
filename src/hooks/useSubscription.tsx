@@ -67,11 +67,15 @@ export const useSubscription = () => {
 
   const createCheckoutSession = async (priceId: string, planName: string) => {
     if (!user || !session || !validateSession(session)) {
+      console.log('No user or session found, redirecting to auth');
       toast({
-        title: "Error",
-        description: "Debes iniciar sesión para suscribirte",
-        variant: "destructive",
+        title: "Inicia sesión",
+        description: "Necesitas iniciar sesión para suscribirte. Te redirigiremos a la página de registro.",
       });
+      // Esperar un momento antes de redirigir para que el usuario vea el mensaje
+      setTimeout(() => {
+        window.location.href = '/auth?mode=register';
+      }, 1000);
       return;
     }
 
@@ -135,10 +139,8 @@ export const useSubscription = () => {
 
       console.log('Redirecting to Stripe checkout:', data.url);
       
-      // Small delay to ensure state updates, then redirect
-      setTimeout(() => {
-        window.location.href = data.url;
-      }, 100);
+      // Redirect to Stripe checkout
+      window.location.href = data.url;
       
     } catch (error) {
       console.error('Error creating checkout session:', error);
@@ -149,10 +151,7 @@ export const useSubscription = () => {
         variant: "destructive",
       });
     } finally {
-      // Keep loading state for a bit longer to prevent button flickering
-      setTimeout(() => {
-        setLoading(false);
-      }, 500);
+      setLoading(false);
     }
   };
 

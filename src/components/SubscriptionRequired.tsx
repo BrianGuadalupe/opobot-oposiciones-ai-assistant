@@ -40,6 +40,7 @@ const SubscriptionRequired = () => {
 
   const handleSubscribe = async (plan: typeof plans[0]) => {
     if (!user) {
+      // Redirigir a la página de registro sin intentar hacer login
       window.location.href = '/auth?mode=register';
       return;
     }
