@@ -163,11 +163,13 @@ const Pricing = () => {
                   
                   {plan.name === 'Academias' ? (
                     <Button 
-                      onClick={() => setModalOpen(true)}
+                      onClick={() => handleSubscribe(plan.name)}
+                      disabled={loading}
                       className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
                       size="lg"
                     >
-                      Contactar
+                      <CreditCard className="w-4 h-4 mr-2" />
+                      {user ? (loading ? 'Cargando...' : 'Suscribirse') : 'Comenzar Gratis'}
                     </Button>
                   ) : isCurrent ? (
                     <Button 

@@ -34,6 +34,19 @@ const SubscriptionRequired = () => {
         "Seguimiento de progreso"
       ],
       popular: true
+    },
+    {
+      name: "Academias",
+      price: "49,95",
+      description: "Solución para centros",
+      features: [
+        "Hasta 50 estudiantes",
+        "Panel de administración",
+        "Estadísticas detalladas",
+        "Soporte telefónico",
+        "Integración personalizada",
+        "Formación incluida"
+      ]
     }
   ];
 
@@ -54,7 +67,7 @@ const SubscriptionRequired = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-opobot-blue to-opobot-green flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
+      <div className="w-full max-w-6xl">
         <Card className="mb-8">
           <CardHeader className="text-center pb-6">
             <div className="mx-auto w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mb-4">
@@ -69,7 +82,7 @@ const SubscriptionRequired = () => {
           </CardHeader>
         </Card>
 
-        <div className="grid md:grid-cols-2 gap-6 mb-8">
+        <div className="grid md:grid-cols-3 gap-6 mb-8">
           {plans.map((plan, index) => (
             <Card 
               key={index} 
