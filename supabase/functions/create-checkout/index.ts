@@ -21,21 +21,44 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    // Test Supabase client creation
+    logStep("Creating Supabase client");
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? ""
     );
+    logStep("Supabase client created successfully");
 
+    // Test auth header extraction
+    logStep("Checking authorization header");
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
+    if (!authHeader) {
+      logStep("ERROR: No authorization header provided");
+      throw new Error("No authorization header provided");
+    }
+    logStep("Authorization header found", { headerLength: authHeader.length });
     
+    // Test token extraction
     const token = authHeader.replace("Bearer ", "");
+    logStep("Token extracted", { tokenLength: token.length });
+
+    // Test user authentication - THIS IS WHERE IT MIGHT BE HANGING
+    logStep("About to call supabaseClient.auth.getUser");
+    const startTime = Date.now();
+    
     const { data } = await supabaseClient.auth.getUser(token);
+    const authTime = Date.now() - startTime;
+    logStep("Auth call completed", { timeMs: authTime });
+    
     const user = data.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
+    if (!user?.email) {
+      logStep("ERROR: User not authenticated or email not available");
+      throw new Error("User not authenticated or email not available");
+    }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Parse JSON body safely
+    // Test request body parsing
+    logStep("About to parse request body");
     let requestBody;
     try {
       const bodyText = await req.text();
@@ -46,15 +69,21 @@ serve(async (req) => {
       }
       
       requestBody = JSON.parse(bodyText);
+      logStep("Request body parsed successfully", requestBody);
     } catch (parseError) {
       logStep("JSON parsing error", { error: parseError.message });
       throw new Error("Invalid JSON in request body");
     }
 
     const { priceId, planName } = requestBody;
-    if (!priceId || !planName) throw new Error("Missing priceId or planName");
-    logStep("Request data", { priceId, planName });
+    if (!priceId || !planName) {
+      logStep("ERROR: Missing priceId or planName");
+      throw new Error("Missing priceId or planName");
+    }
+    logStep("Request data validated", { priceId, planName });
 
+    // Test Stripe key retrieval
+    logStep("Checking Stripe secret key");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
       logStep("ERROR: STRIPE_SECRET_KEY not found");
@@ -68,12 +97,21 @@ serve(async (req) => {
 
     logStep("Stripe key validated", { keyPrefix: stripeKey.substring(0, 10) });
 
+    // Test Stripe client creation
+    logStep("Creating Stripe client");
     const stripe = new Stripe(stripeKey, { 
       apiVersion: "2023-10-16" 
     });
+    logStep("Stripe client created successfully");
 
-    // Check if customer already exists
+    // Test customer lookup - THIS MIGHT ALSO HANG
+    logStep("About to search for existing customer");
+    const customerStartTime = Date.now();
+    
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customerTime = Date.now() - customerStartTime;
+    logStep("Customer search completed", { timeMs: customerTime, customersFound: customers.data.length });
+    
     let customerId;
     if (customers.data.length > 0) {
       customerId = customers.data[0].id;
@@ -82,9 +120,11 @@ serve(async (req) => {
       logStep("No existing customer found");
     }
 
+    // Test session creation - THIS IS MOST LIKELY TO HANG
     const origin = req.headers.get("origin") || "https://www.opobots.com";
-    logStep("Creating Stripe session", { origin, customerId, priceId });
+    logStep("About to create Stripe checkout session", { origin, customerId, priceId });
     
+    const sessionStartTime = Date.now();
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       customer_email: customerId ? undefined : user.email,
@@ -102,8 +142,13 @@ serve(async (req) => {
         plan_name: planName,
       },
     });
+    const sessionTime = Date.now() - sessionStartTime;
 
-    logStep("Checkout session created", { sessionId: session.id, url: session.url });
+    logStep("Checkout session created successfully", { 
+      sessionId: session.id, 
+      url: session.url,
+      timeMs: sessionTime 
+    });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -111,7 +156,7 @@ serve(async (req) => {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in create-checkout", { message: errorMessage });
+    logStep("ERROR in create-checkout", { message: errorMessage, stack: error instanceof Error ? error.stack : 'No stack' });
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
