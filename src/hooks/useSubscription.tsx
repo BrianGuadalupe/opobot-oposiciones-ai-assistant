@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -69,8 +68,6 @@ export const useSubscription = () => {
   const createCheckoutSession = async (planName: string) => {
     console.log('=== INICIO createCheckoutSession (Híbrida Segura) ===');
     console.log('planName:', planName);
-    console.log('user:', user);
-    console.log('session:', session);
     
     // Si no hay usuario autenticado, redirigir directamente al registro
     if (!user || !session || !validateSession(session)) {
@@ -100,15 +97,9 @@ export const useSubscription = () => {
     try {
       console.log('=== LLAMANDO A create-checkout (Híbrida) ===');
       console.log('Enviando solo planName:', planName);
-      console.log('Session access token exists:', !!session.access_token);
       
-      // Timeout para la función
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Timeout: La función tardó más de 30 segundos')), 30000);
-      });
-
       // Solo enviamos planName - el priceId se mapea en el servidor
-      const invokePromise = supabase.functions.invoke('create-checkout', {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { 
           planName: planName.trim() // Solo enviamos el nombre del plan
         },
@@ -118,15 +109,9 @@ export const useSubscription = () => {
         },
       });
 
-      console.log('=== Esperando respuesta con timeout de 30s ===');
-      const invokeResult = await Promise.race([invokePromise, timeoutPromise]);
-
       console.log('=== RESPUESTA DE create-checkout ===');
-      console.log('invokeResult:', invokeResult);
-      console.log('invokeResult.data:', invokeResult.data);
-      console.log('invokeResult.error:', invokeResult.error);
-
-      const { data, error } = invokeResult;
+      console.log('data:', data);
+      console.log('error:', error);
 
       if (error) {
         console.error('=== ERROR EN create-checkout ===');
@@ -165,20 +150,11 @@ export const useSubscription = () => {
       console.error('Error creating checkout session:', error);
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
-      // Show more detailed error information
-      if (errorMessage.includes('Timeout')) {
-        toast({
-          title: "Error de Conexión",
-          description: "La solicitud tardó demasiado tiempo. Por favor, verifica tu conexión a internet e intenta de nuevo.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error de Pago",
-          description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error de Pago",
+        description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
+        variant: "destructive",
+      });
     } finally {
       console.log('=== FINALIZANDO - Setting loading to false ===');
       setLoading(false);

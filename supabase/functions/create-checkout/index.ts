@@ -27,11 +27,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  logStep("Function invoked", { method: req.method, url: req.url });
+  logStep("Function invoked", { method: req.method });
 
   try {
     // Environment variables check
-    logStep("Checking environment variables");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
@@ -49,12 +48,9 @@ serve(async (req) => {
     logStep("Environment variables OK");
 
     // Create Supabase client
-    logStep("Creating Supabase client");
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
-    logStep("Supabase client created");
 
     // Get authorization header
-    logStep("Checking authorization");
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       logStep("ERROR: No authorization header");
@@ -62,7 +58,7 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    logStep("Token extracted", { tokenLength: token.length });
+    logStep("Token extracted");
 
     // Authenticate user
     logStep("Authenticating user");
@@ -81,8 +77,7 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Parse request body - only expecting planName now
-    logStep("Parsing request body");
+    // Parse request body
     const requestBody = await req.json();
     logStep("Request body parsed", requestBody);
 
@@ -104,7 +99,6 @@ serve(async (req) => {
     // Initialize Stripe
     logStep("Initializing Stripe");
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    logStep("Stripe initialized");
 
     // Check for existing customer
     logStep("Checking for existing customer");
@@ -119,7 +113,7 @@ serve(async (req) => {
       customerId = customers.data[0].id;
       logStep("Existing customer found", { customerId });
     } else {
-      logStep("No existing customer found");
+      logStep("No existing customer found, will create new one");
     }
 
     // Get origin for redirect URLs
