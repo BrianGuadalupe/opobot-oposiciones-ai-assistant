@@ -67,10 +67,8 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (planName: string) => {
-    console.log('=== CHECKOUT SESSION START ===');
-    console.log('Plan:', planName);
-    console.log('User:', !!user);
-    console.log('Session:', !!session);
+    console.log('=== STARTING CHECKOUT ===');
+    console.log('Plan name:', planName);
     
     // Redirect to auth if no user
     if (!user || !session || !validateSession(session)) {
@@ -95,42 +93,26 @@ export const useSubscription = () => {
     }
 
     setLoading(true);
-    console.log('Starting checkout process...');
 
     try {
       console.log('=== CALLING EDGE FUNCTION ===');
-      console.log('Function name: create-checkout');
-      console.log('Request body:', { planName });
       
-      // Create a promise with timeout
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Function call timeout after 30 seconds')), 30000)
-      );
-
-      console.log('=== MAKING SUPABASE INVOKE CALL ===');
-      
-      const invokePromise = supabase.functions.invoke('create-checkout', {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { planName: planName.trim() },
         headers: {
           'Content-Type': 'application/json',
         },
       });
 
-      console.log('=== WAITING FOR RESPONSE ===');
-      
-      const response = await Promise.race([invokePromise, timeoutPromise]) as any;
-      
       console.log('=== RESPONSE RECEIVED ===');
-      console.log('Response status:', response?.status);
-      console.log('Response error:', response?.error);
-      console.log('Response data:', response?.data);
+      console.log('Error:', error);
+      console.log('Data:', data);
 
-      if (response.error) {
-        console.error('Edge function error:', response.error);
-        throw new Error(response.error.message || 'Error en el servidor');
+      if (error) {
+        console.error('Edge function error:', error);
+        throw new Error(error.message || 'Error en el servidor');
       }
 
-      const data = response.data;
       if (!data?.url) {
         console.error('No URL in response:', data);
         throw new Error('No se recibió URL de checkout');
@@ -144,9 +126,7 @@ export const useSubscription = () => {
       
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
-      console.error('Error type:', error?.constructor?.name);
-      console.error('Error message:', error instanceof Error ? error.message : String(error));
-      console.error('Full error:', error);
+      console.error('Error:', error);
       
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
