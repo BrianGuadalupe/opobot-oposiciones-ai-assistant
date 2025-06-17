@@ -18,6 +18,7 @@ export const useSubscription = () => {
     subscribed: false,
     loading: true,
   });
+  const [loading, setLoading] = useState(false);
 
   const checkSubscription = useCallback(async () => {
     if (!user || !session || !validateSession(session)) {
@@ -94,7 +95,11 @@ export const useSubscription = () => {
       return;
     }
 
+    setLoading(true);
+
     try {
+      console.log('Creating checkout session for:', { priceId, planName });
+      
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { priceId, planName },
         headers: {
@@ -119,11 +124,14 @@ export const useSubscription = () => {
         throw new Error('Invalid checkout URL format');
       }
 
+      console.log('Redirecting to Stripe checkout:', data.url);
       // Redirect to Stripe checkout
       window.location.href = data.url;
     } catch (error) {
       console.error('Error creating checkout session:', error);
       handleSecureError(error, 'No se pudo iniciar el proceso de pago');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -178,5 +186,6 @@ export const useSubscription = () => {
     checkSubscription,
     createCheckoutSession,
     openCustomerPortal,
+    loading,
   };
 };
