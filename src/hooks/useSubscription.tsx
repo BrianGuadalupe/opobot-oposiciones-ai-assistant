@@ -66,9 +66,8 @@ export const useSubscription = () => {
     }
   }, [user, session]);
 
-  const createCheckoutSession = async (priceId: string, planName: string) => {
-    console.log('=== INICIO createCheckoutSession ===');
-    console.log('priceId:', priceId);
+  const createCheckoutSession = async (planName: string) => {
+    console.log('=== INICIO createCheckoutSession (Híbrida Segura) ===');
     console.log('planName:', planName);
     console.log('user:', user);
     console.log('session:', session);
@@ -80,22 +79,11 @@ export const useSubscription = () => {
         title: "Regístrate",
         description: "Necesitas registrarte para suscribirte. Te redirigiremos a la página de registro.",
       });
-      // Redirigir inmediatamente sin intentar hacer login
       window.location.href = '/auth?mode=register';
       return;
     }
 
-    // Validate inputs
-    if (!priceId || typeof priceId !== 'string' || priceId.length > 100) {
-      console.error('Invalid priceId:', priceId);
-      toast({
-        title: "Error",
-        description: "Información del plan no válida",
-        variant: "destructive",
-      });
-      return;
-    }
-
+    // Validate planName (solo validación básica)
     if (!planName || typeof planName !== 'string' || planName.length > 50) {
       console.error('Invalid planName:', planName);
       toast({
@@ -110,22 +98,19 @@ export const useSubscription = () => {
     console.log('Loading set to true');
 
     try {
-      console.log('=== ANTES DE LLAMAR A create-checkout ===');
-      console.log('Creating checkout session for:', { priceId, planName, userId: user.id });
+      console.log('=== LLAMANDO A create-checkout (Híbrida) ===');
+      console.log('Enviando solo planName:', planName);
       console.log('Session access token exists:', !!session.access_token);
-      console.log('Session access token length:', session.access_token?.length);
       
-      console.log('=== LLAMANDO A supabase.functions.invoke ===');
-      
-      // Add timeout to the invoke call
+      // Timeout para la función
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error('Timeout: La función tardó más de 30 segundos')), 30000);
       });
 
+      // Solo enviamos planName - el priceId se mapea en el servidor
       const invokePromise = supabase.functions.invoke('create-checkout', {
         body: { 
-          priceId: priceId.trim(), 
-          planName: planName.trim() 
+          planName: planName.trim() // Solo enviamos el nombre del plan
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -146,8 +131,6 @@ export const useSubscription = () => {
       if (error) {
         console.error('=== ERROR EN create-checkout ===');
         console.error('Error object:', error);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
         throw new Error(`Failed to create checkout session: ${error.message || 'Unknown error'}`);
       }
 
@@ -174,7 +157,7 @@ export const useSubscription = () => {
       console.log('=== REDIRIGIENDO A STRIPE ===');
       console.log('Redirecting to Stripe checkout:', data.url);
       
-      // Redirect to Stripe checkout (not open in new tab to avoid popups)
+      // Redirect to Stripe checkout
       window.location.href = data.url;
       
     } catch (error) {

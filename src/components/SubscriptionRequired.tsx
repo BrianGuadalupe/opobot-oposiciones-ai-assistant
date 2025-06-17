@@ -9,11 +9,11 @@ const SubscriptionRequired = () => {
   const { user } = useAuth();
   const { createCheckoutSession, loading } = useSubscription();
 
+  // Frontend: Solo datos de presentación (no críticos)
   const plans = [
     {
       name: "Básico",
       price: "9,95",
-      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Price ID verificado
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
@@ -25,7 +25,6 @@ const SubscriptionRequired = () => {
     {
       name: "Profesional",
       price: "19,95",
-      priceId: "price_1RakGGG0tRQIugBefzFK7piu", // Price ID correcto verificado
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",
@@ -38,8 +37,8 @@ const SubscriptionRequired = () => {
     }
   ];
 
-  const handleSubscribe = async (plan: typeof plans[0]) => {
-    console.log('Subscribe button clicked for plan:', plan.name);
+  const handleSubscribe = async (planName: string) => {
+    console.log('Subscribe button clicked for plan:', planName);
     console.log('User authenticated:', !!user);
     
     if (!user) {
@@ -48,8 +47,9 @@ const SubscriptionRequired = () => {
       return;
     }
     
-    console.log('Calling createCheckoutSession with:', { priceId: plan.priceId, planName: plan.name });
-    await createCheckoutSession(plan.priceId, plan.name);
+    console.log('Calling createCheckoutSession with planName:', planName);
+    // Solo enviamos el nombre del plan - híbrida segura
+    await createCheckoutSession(planName);
   };
 
   return (
@@ -110,7 +110,7 @@ const SubscriptionRequired = () => {
                 </ul>
                 
                 <Button 
-                  onClick={() => handleSubscribe(plan)}
+                  onClick={() => handleSubscribe(plan.name)}
                   disabled={loading}
                   className={`w-full rounded-lg text-base shadow-sm ${
                     plan.popular 

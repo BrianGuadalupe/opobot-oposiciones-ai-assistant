@@ -14,6 +14,12 @@ const logStep = (step: string, details?: any) => {
   console.log(`[${timestamp}] [CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
+// Secure mapping of plan names to price IDs (server-side only)
+const PLAN_MAPPING = {
+  "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
+  "Profesional": "price_1RakGGG0tRQIugBefzFK7piu"
+};
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -75,16 +81,25 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Parse request body
+    // Parse request body - only expecting planName now
     logStep("Parsing request body");
     const requestBody = await req.json();
     logStep("Request body parsed", requestBody);
 
-    const { priceId, planName } = requestBody;
-    if (!priceId || !planName) {
-      logStep("ERROR: Missing required fields");
-      throw new Error("Missing priceId or planName");
+    const { planName } = requestBody;
+    if (!planName || typeof planName !== 'string') {
+      logStep("ERROR: Missing or invalid planName");
+      throw new Error("Missing or invalid planName");
     }
+
+    // Securely map planName to priceId on server side
+    const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
+    if (!priceId) {
+      logStep("ERROR: Invalid plan name", { planName, availablePlans: Object.keys(PLAN_MAPPING) });
+      throw new Error("Invalid plan name");
+    }
+
+    logStep("Plan mapped to price ID", { planName, priceId });
 
     // Initialize Stripe
     logStep("Initializing Stripe");
@@ -109,7 +124,7 @@ serve(async (req) => {
 
     // Get origin for redirect URLs
     const origin = req.headers.get("origin") || "https://www.opobots.com";
-    logStep("Creating checkout session", { origin, customerId, priceId });
+    logStep("Creating checkout session", { origin, customerId, priceId, planName });
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({

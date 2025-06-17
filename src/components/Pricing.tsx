@@ -12,12 +12,12 @@ const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, subscription_tier, createCheckoutSession, openCustomerPortal, loading } = useSubscription();
   
+  // Frontend: Solo datos de presentación (no críticos)
   const plans = [
     {
       name: "Básico",
-      price: "9,95",
+      price: "9,95", 
       period: "mes",
-      priceId: "price_1RakDbG0tRQIugBejNs3yiVA", // Price ID verificado
       description: "Perfecto para empezar",
       features: [
         "100 consultas mensuales",
@@ -31,7 +31,6 @@ const Pricing = () => {
       name: "Profesional",
       price: "19,95", 
       period: "mes",
-      priceId: "price_1RakGGG0tRQIugBefzFK7piu", // Price ID correcto verificado
       description: "Para estudiantes serios",
       features: [
         "Consultas ilimitadas",
@@ -47,7 +46,6 @@ const Pricing = () => {
       name: "Academias",
       price: "49,95",
       period: "mes",
-      priceId: "price_1RakGkG0tRQlugBeECOoQl3p", // Este también necesita verificación
       description: "Solución para centros",
       features: [
         "Hasta 50 estudiantes",
@@ -63,13 +61,14 @@ const Pricing = () => {
 
   const [modalOpen, setModalOpen] = useState(false);
 
-  const handleSubscribe = async (plan: typeof plans[0]) => {
+  const handleSubscribe = async (planName: string) => {
     if (!user) {
       window.location.href = '/auth?mode=register';
       return;
     }
 
-    await createCheckoutSession(plan.priceId, plan.name);
+    // Solo enviamos el nombre del plan - híbrida segura
+    await createCheckoutSession(planName);
   };
 
   const isCurrentPlan = (planName: string) => {
@@ -182,7 +181,7 @@ const Pricing = () => {
                     </Button>
                   ) : (
                     <Button 
-                      onClick={() => handleSubscribe(plan)}
+                      onClick={() => handleSubscribe(plan.name)}
                       disabled={loading}
                       className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
                       size="lg"
