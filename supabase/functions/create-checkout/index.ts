@@ -55,7 +55,20 @@ serve(async (req) => {
     if (!priceId || !planName) throw new Error("Missing priceId or planName");
     logStep("Request data", { priceId, planName });
 
-    const stripe = new Stripe(Deno.env.get("stripe_api_key") || "", { 
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) {
+      logStep("ERROR: STRIPE_SECRET_KEY not found");
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+    
+    if (!stripeKey.startsWith('sk_')) {
+      logStep("ERROR: Invalid Stripe key format", { keyPrefix: stripeKey.substring(0, 10) });
+      throw new Error("Invalid Stripe secret key format");
+    }
+
+    logStep("Stripe key validated", { keyPrefix: stripeKey.substring(0, 10) });
+
+    const stripe = new Stripe(stripeKey, { 
       apiVersion: "2023-10-16" 
     });
 
@@ -70,6 +83,7 @@ serve(async (req) => {
     }
 
     const origin = req.headers.get("origin") || "https://www.opobots.com";
+    logStep("Creating Stripe session", { origin, customerId, priceId });
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
