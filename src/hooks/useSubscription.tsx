@@ -102,7 +102,7 @@ export const useSubscription = () => {
       // Solo enviamos planName - el priceId se mapea en el servidor
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         body: { 
-          planName: planName.trim() // Solo enviamos el nombre del plan
+          planName: planName.trim()
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -117,9 +117,6 @@ export const useSubscription = () => {
       if (error) {
         console.error('=== ERROR EN create-checkout ===');
         console.error('Error object:', error);
-        console.error('Error message:', error.message);
-        console.error('Error details:', error.details);
-        console.error('Error hint:', error.hint);
         throw new Error(`Error en checkout: ${error.message || 'Error desconocido'}`);
       }
 

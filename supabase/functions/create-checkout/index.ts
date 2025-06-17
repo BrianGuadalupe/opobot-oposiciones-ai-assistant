@@ -23,18 +23,12 @@ const PLAN_MAPPING = {
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    logStep("CORS preflight request");
+    logStep("CORS preflight request handled");
     return new Response(null, { headers: corsHeaders });
   }
 
   logStep("=== FUNCTION STARTED ===");
-  logStep("Request method", { method: req.method });
-  logStep("Request headers", { 
-    origin: req.headers.get("origin"),
-    authorization: req.headers.get("Authorization") ? "present" : "missing",
-    contentType: req.headers.get("content-type")
-  });
-
+  
   try {
     // Environment variables check
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
@@ -49,12 +43,22 @@ serve(async (req) => {
 
     if (!supabaseUrl || !supabaseKey) {
       logStep("ERROR: Missing Supabase environment variables");
-      throw new Error("Missing Supabase configuration");
+      return new Response(JSON.stringify({ 
+        error: "Missing Supabase configuration"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
     }
 
     if (!stripeKey) {
       logStep("ERROR: Missing Stripe secret key");
-      throw new Error("Missing Stripe secret key");
+      return new Response(JSON.stringify({ 
+        error: "Missing Stripe secret key"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
     }
 
     // Create Supabase client
@@ -65,7 +69,12 @@ serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       logStep("ERROR: No authorization header");
-      throw new Error("No authorization header provided");
+      return new Response(JSON.stringify({ 
+        error: "No authorization header provided"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
 
     const token = authHeader.replace("Bearer ", "");
@@ -77,42 +86,74 @@ serve(async (req) => {
     
     if (authError) {
       logStep("ERROR: Authentication failed", { error: authError.message });
-      throw new Error(`Authentication failed: ${authError.message}`);
+      return new Response(JSON.stringify({ 
+        error: `Authentication failed: ${authError.message}`
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
 
     const user = data.user;
     if (!user?.email) {
       logStep("ERROR: No user or email");
-      throw new Error("User not authenticated or email not available");
+      return new Response(JSON.stringify({ 
+        error: "User not authenticated or email not available"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
 
     logStep("User authenticated successfully", { 
       userId: user.id, 
-      email: user.email.substring(0, 3) + "***" // Partial email for privacy
+      email: user.email.substring(0, 3) + "***"
     });
 
     // Parse request body
     logStep("=== PARSING REQUEST BODY ===");
     let requestBody;
     try {
-      requestBody = await req.json();
+      const bodyText = await req.text();
+      logStep("Raw body received", { bodyLength: bodyText.length });
+      
+      if (!bodyText) {
+        throw new Error("Empty request body");
+      }
+      
+      requestBody = JSON.parse(bodyText);
       logStep("Request body parsed", { keys: Object.keys(requestBody) });
     } catch (parseError) {
       logStep("ERROR: Failed to parse request body", { error: parseError.message });
-      throw new Error("Invalid request body");
+      return new Response(JSON.stringify({ 
+        error: "Invalid request body"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
     }
 
     const { planName } = requestBody;
     if (!planName || typeof planName !== 'string') {
       logStep("ERROR: Missing or invalid planName", { planName });
-      throw new Error("Missing or invalid planName");
+      return new Response(JSON.stringify({ 
+        error: "Missing or invalid planName"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
     }
 
     // Securely map planName to priceId on server side
     const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
     if (!priceId) {
       logStep("ERROR: Invalid plan name", { planName, availablePlans: Object.keys(PLAN_MAPPING) });
-      throw new Error("Invalid plan name");
+      return new Response(JSON.stringify({ 
+        error: "Invalid plan name"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 400,
+      });
     }
 
     logStep("Plan mapped successfully", { planName, priceId });
@@ -134,7 +175,7 @@ serve(async (req) => {
       customerId = customers.data[0].id;
       logStep("Existing customer found", { customerId });
     } else {
-      logStep("No existing customer found, will create new one");
+      logStep("No existing customer found, will create new one during checkout");
     }
 
     // Get origin for redirect URLs
@@ -170,10 +211,7 @@ serve(async (req) => {
       url: session.url ? "present" : "missing"
     });
 
-    const response = JSON.stringify({ url: session.url });
-    logStep("=== RETURNING RESPONSE ===", { responseLength: response.length });
-
-    return new Response(response, {
+    return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
@@ -185,7 +223,7 @@ serve(async (req) => {
     logStep("=== CRITICAL ERROR OCCURRED ===", { 
       message: errorMessage,
       type: error?.constructor?.name || 'Unknown',
-      stack: stack?.split('\n').slice(0, 3).join('\n') // First 3 lines of stack
+      stack: stack?.split('\n').slice(0, 3).join('\n')
     });
     
     return new Response(JSON.stringify({ 
