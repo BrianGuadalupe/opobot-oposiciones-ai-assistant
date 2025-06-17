@@ -27,13 +27,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  logStep("Function invoked", { method: req.method });
+  logStep("=== FUNCTION STARTED ===");
+  logStep("Request method", { method: req.method });
+  logStep("Request headers", { 
+    origin: req.headers.get("origin"),
+    authorization: req.headers.get("Authorization") ? "present" : "missing",
+    contentType: req.headers.get("content-type")
+  });
 
   try {
     // Environment variables check
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+
+    logStep("Environment check", {
+      supabaseUrl: supabaseUrl ? "present" : "missing",
+      supabaseKey: supabaseKey ? "present" : "missing", 
+      stripeKey: stripeKey ? "present" : "missing"
+    });
 
     if (!supabaseUrl || !supabaseKey) {
       logStep("ERROR: Missing Supabase environment variables");
@@ -45,10 +57,9 @@ serve(async (req) => {
       throw new Error("Missing Stripe secret key");
     }
 
-    logStep("Environment variables OK");
-
     // Create Supabase client
     const supabaseClient = createClient(supabaseUrl, supabaseKey);
+    logStep("Supabase client created");
 
     // Get authorization header
     const authHeader = req.headers.get("Authorization");
@@ -58,10 +69,10 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    logStep("Token extracted");
+    logStep("Token extracted", { tokenLength: token.length });
 
     // Authenticate user
-    logStep("Authenticating user");
+    logStep("=== AUTHENTICATING USER ===");
     const { data, error: authError } = await supabaseClient.auth.getUser(token);
     
     if (authError) {
@@ -75,15 +86,25 @@ serve(async (req) => {
       throw new Error("User not authenticated or email not available");
     }
 
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    logStep("User authenticated successfully", { 
+      userId: user.id, 
+      email: user.email.substring(0, 3) + "***" // Partial email for privacy
+    });
 
     // Parse request body
-    const requestBody = await req.json();
-    logStep("Request body parsed", requestBody);
+    logStep("=== PARSING REQUEST BODY ===");
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      logStep("Request body parsed", { keys: Object.keys(requestBody) });
+    } catch (parseError) {
+      logStep("ERROR: Failed to parse request body", { error: parseError.message });
+      throw new Error("Invalid request body");
+    }
 
     const { planName } = requestBody;
     if (!planName || typeof planName !== 'string') {
-      logStep("ERROR: Missing or invalid planName");
+      logStep("ERROR: Missing or invalid planName", { planName });
       throw new Error("Missing or invalid planName");
     }
 
@@ -94,14 +115,14 @@ serve(async (req) => {
       throw new Error("Invalid plan name");
     }
 
-    logStep("Plan mapped to price ID", { planName, priceId });
+    logStep("Plan mapped successfully", { planName, priceId });
 
     // Initialize Stripe
-    logStep("Initializing Stripe");
+    logStep("=== INITIALIZING STRIPE ===");
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
     // Check for existing customer
-    logStep("Checking for existing customer");
+    logStep("=== CHECKING FOR EXISTING CUSTOMER ===");
     const customers = await stripe.customers.list({ 
       email: user.email, 
       limit: 1 
@@ -118,7 +139,12 @@ serve(async (req) => {
 
     // Get origin for redirect URLs
     const origin = req.headers.get("origin") || "https://www.opobots.com";
-    logStep("Creating checkout session", { origin, customerId, priceId, planName });
+    logStep("=== CREATING CHECKOUT SESSION ===", { 
+      origin, 
+      customerId: customerId ? "present" : "will_create", 
+      priceId, 
+      planName 
+    });
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
@@ -139,24 +165,33 @@ serve(async (req) => {
       },
     });
 
-    logStep("Checkout session created successfully", { 
+    logStep("=== CHECKOUT SESSION CREATED SUCCESSFULLY ===", { 
       sessionId: session.id, 
-      url: session.url 
+      url: session.url ? "present" : "missing"
     });
 
-    return new Response(JSON.stringify({ url: session.url }), {
+    const response = JSON.stringify({ url: session.url });
+    logStep("=== RETURNING RESPONSE ===", { responseLength: response.length });
+
+    return new Response(response, {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR occurred", { 
-      message: errorMessage, 
-      stack: error instanceof Error ? error.stack : 'No stack available' 
+    const stack = error instanceof Error ? error.stack : 'No stack available';
+    
+    logStep("=== CRITICAL ERROR OCCURRED ===", { 
+      message: errorMessage,
+      type: error?.constructor?.name || 'Unknown',
+      stack: stack?.split('\n').slice(0, 3).join('\n') // First 3 lines of stack
     });
     
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    return new Response(JSON.stringify({ 
+      error: errorMessage,
+      timestamp: new Date().toISOString()
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

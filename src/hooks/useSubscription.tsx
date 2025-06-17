@@ -97,6 +97,7 @@ export const useSubscription = () => {
     try {
       console.log('=== LLAMANDO A create-checkout (Híbrida) ===');
       console.log('Enviando solo planName:', planName);
+      console.log('Session access token exists:', !!session.access_token);
       
       // Solo enviamos planName - el priceId se mapea en el servidor
       const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -116,13 +117,21 @@ export const useSubscription = () => {
       if (error) {
         console.error('=== ERROR EN create-checkout ===');
         console.error('Error object:', error);
-        throw new Error(`Failed to create checkout session: ${error.message || 'Unknown error'}`);
+        console.error('Error message:', error.message);
+        console.error('Error details:', error.details);
+        console.error('Error hint:', error.hint);
+        throw new Error(`Error en checkout: ${error.message || 'Error desconocido'}`);
       }
 
-      if (!data || !data.url || typeof data.url !== 'string') {
+      if (!data) {
+        console.error('=== NO DATA RECEIVED ===');
+        throw new Error('No se recibió respuesta del servidor');
+      }
+
+      if (!data.url || typeof data.url !== 'string') {
         console.error('=== DATOS INVÁLIDOS ===');
         console.error('Invalid response data:', data);
-        throw new Error('Invalid checkout URL received from server');
+        throw new Error('URL de checkout inválida recibida del servidor');
       }
 
       // Validate URL before opening
@@ -131,12 +140,12 @@ export const useSubscription = () => {
         console.log('=== URL VALIDADA ===');
         console.log('URL hostname:', url.hostname);
         if (!url.hostname.includes('checkout.stripe.com')) {
-          throw new Error('Invalid checkout URL domain');
+          throw new Error('Dominio de URL de checkout inválido');
         }
       } catch (urlError) {
         console.error('=== ERROR DE VALIDACIÓN DE URL ===');
         console.error('URL validation error:', urlError);
-        throw new Error('Invalid checkout URL format');
+        throw new Error('Formato de URL de checkout inválido');
       }
 
       console.log('=== REDIRIGIENDO A STRIPE ===');
