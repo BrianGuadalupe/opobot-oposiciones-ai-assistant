@@ -111,14 +111,27 @@ export const useSubscription = () => {
       const body = { planName: planName.trim() };
       console.log('Body para petición:', body);
       
-      // Realizar la petición con mejor manejo de errores
-      const response = await supabase.functions.invoke('create-checkout', {
-        body: body,
-        headers: headers,
-      }).catch(error => {
-        console.error('Error en invoke de create-checkout:', error);
-        throw new Error(`Error en invocación de la función: ${error.message || 'Error desconocido'}`);
-      });
+      console.log('=== PUNTO A: Antes de invoke ===');
+      
+      // Realizar la petición con manejo de errores mejorado
+      let response;
+      try {
+        console.log('=== PUNTO B: Iniciando invoke ===');
+        response = await supabase.functions.invoke('create-checkout', {
+          body: body,
+          headers: headers,
+        });
+        console.log('=== PUNTO C: Invoke completado ===');
+        console.log('Response recibida:', response);
+      } catch (invokeError) {
+        console.error('=== ERROR EN INVOKE ===');
+        console.error('Error type:', typeof invokeError);
+        console.error('Error constructor:', invokeError?.constructor?.name);
+        console.error('Error message:', invokeError?.message);
+        console.error('Error stack:', invokeError?.stack);
+        console.error('Full error object:', invokeError);
+        throw new Error(`Error en invocación de la función: ${invokeError?.message || 'Error desconocido'}`);
+      }
       
       console.log('=== RESPUESTA DE create-checkout ===');
       console.log('response completa:', response);
@@ -134,6 +147,9 @@ export const useSubscription = () => {
         console.error('=== NO DATA RECEIVED ===');
         throw new Error('No se recibió respuesta del servidor');
       }
+
+      console.log('=== DATOS RECIBIDOS ===');
+      console.log('Data:', data);
 
       if (!data.url || typeof data.url !== 'string') {
         console.error('=== DATOS INVÁLIDOS ===');
@@ -163,7 +179,12 @@ export const useSubscription = () => {
       
     } catch (error) {
       console.error('=== ERROR FINAL ===');
-      console.error('Error creating checkout session:', error);
+      console.error('Error type:', typeof error);
+      console.error('Error constructor:', error?.constructor?.name);
+      console.error('Error message:', error?.message);
+      console.error('Error stack:', error?.stack);
+      console.error('Full error object:', error);
+      
       const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
       
       toast({
