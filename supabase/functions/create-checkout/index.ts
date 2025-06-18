@@ -126,11 +126,11 @@ serve(async (req) => {
       });
     }
 
-    // 4. MAPEAR PLANES A PRICE IDs - ACTUALIZA ESTOS CON TUS PRICE IDs REALES
+    // 4. MAPEAR PLANES A PRICE IDs - TUS PRICE IDs REALES
     const PLAN_MAPPING = {
-      "Básico": "REEMPLAZA_CON_TU_PRICE_ID_BASICO",
-      "Profesional": "REEMPLAZA_CON_TU_PRICE_ID_PROFESIONAL", 
-      "Academias": "REEMPLAZA_CON_TU_PRICE_ID_ACADEMIAS"
+      "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
+      "Profesional": "price_1RakGGG0tRQIugBefzFK7piu", 
+      "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
     };
 
     const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
