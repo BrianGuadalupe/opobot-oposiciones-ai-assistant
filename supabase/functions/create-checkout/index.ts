@@ -8,7 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Plan mapping actualizado con price IDs de LIVE mode
+// Plan mapping con price IDs de LIVE mode
 const PLAN_MAPPING = {
   "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
   "Profesional": "price_1RakGGG0tRQIugBefzFK7piu",
