@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { toast } from '@/hooks/use-toast';
-import { handleSecureError, validateSession } from '@/utils/securityUtils';
+import { handleSecureError } from '@/utils/securityUtils';
 
 export interface SubscriptionStatus {
   subscribed: boolean;
@@ -21,8 +21,8 @@ export const useSubscription = () => {
   const [loading, setLoading] = useState(false);
 
   const checkSubscription = useCallback(async () => {
-    if (!user || !session || !validateSession(session)) {
-      console.log('No valid user session for subscription check');
+    if (!user || !session) {
+      console.log('No user or session for subscription check');
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
@@ -72,8 +72,8 @@ export const useSubscription = () => {
     console.log('User:', !!user);
     
     // Redirect to auth if no user
-    if (!user || !session || !validateSession(session)) {
-      console.log('No valid session, redirecting to auth');
+    if (!user || !session) {
+      console.log('No session, redirecting to auth');
       toast({
         title: "Regístrate",
         description: "Necesitas registrarte para suscribirte.",
@@ -137,7 +137,7 @@ export const useSubscription = () => {
   };
 
   const openCustomerPortal = async () => {
-    if (!user || !session || !validateSession(session)) {
+    if (!user || !session) {
       toast({
         title: "Error", 
         description: "Debes iniciar sesión para gestionar tu suscripción",
