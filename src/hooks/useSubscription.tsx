@@ -21,8 +21,9 @@ export const useSubscription = () => {
   const [loading, setLoading] = useState(false);
 
   const checkSubscription = useCallback(async () => {
-    if (!user || !session) {
-      console.log('No user or session for subscription check');
+    // Wait for auth to be fully loaded
+    if (!user || !session?.access_token) {
+      console.log('Subscription check: Waiting for complete auth session');
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
@@ -32,6 +33,8 @@ export const useSubscription = () => {
 
     try {
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
+      
+      console.log('Checking subscription for user:', user.id);
       
       const { data, error } = await supabase.functions.invoke('check-subscription', {
         headers: {
@@ -49,6 +52,8 @@ export const useSubscription = () => {
       if (!data || typeof data.subscribed !== 'boolean') {
         throw new Error('Invalid subscription data received');
       }
+
+      console.log('Subscription check result:', data);
 
       setSubscriptionStatus({
         subscribed: data.subscribed,
@@ -70,10 +75,11 @@ export const useSubscription = () => {
     console.log('=== WEBHOOK CHECKOUT SESSION ===');
     console.log('Plan:', planName);
     console.log('User:', !!user);
+    console.log('Session token available:', !!session?.access_token);
     
-    // Redirect to auth if no user
-    if (!user || !session) {
-      console.log('No session, redirecting to auth');
+    // Enhanced session validation
+    if (!user || !session?.access_token) {
+      console.log('Missing auth requirements, redirecting to auth');
       toast({
         title: "Regístrate",
         description: "Necesitas registrarte para suscribirte.",
@@ -137,7 +143,7 @@ export const useSubscription = () => {
   };
 
   const openCustomerPortal = async () => {
-    if (!user || !session) {
+    if (!user || !session?.access_token) {
       toast({
         title: "Error", 
         description: "Debes iniciar sesión para gestionar tu suscripción",
@@ -178,9 +184,13 @@ export const useSubscription = () => {
     }
   };
 
+  // Only run checkSubscription when we have a complete session
   useEffect(() => {
-    checkSubscription();
-  }, [checkSubscription]);
+    if (user && session?.access_token) {
+      console.log('Auth complete, checking subscription...');
+      checkSubscription();
+    }
+  }, [user, session?.access_token, checkSubscription]);
 
   return {
     ...subscriptionStatus,
