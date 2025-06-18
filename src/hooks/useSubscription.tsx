@@ -12,13 +12,6 @@ export interface SubscriptionStatus {
   loading: boolean;
 }
 
-// Plan mapping con price IDs reales
-const PLAN_MAPPING = {
-  "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
-  "Profesional": "price_1RakGGG0tRQIugBefzFK7piu",
-  "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
-};
-
 export const useSubscription = () => {
   const { user, session } = useAuth();
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
@@ -74,7 +67,7 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (planName: string) => {
-    console.log('=== CHECKOUT DIRECTO CON STRIPE ===');
+    console.log('=== WEBHOOK CHECKOUT SESSION ===');
     console.log('Plan:', planName);
     console.log('User:', !!user);
     
@@ -100,68 +93,31 @@ export const useSubscription = () => {
       return;
     }
 
-    const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
-    if (!priceId) {
-      console.error('Plan no encontrado:', planName);
-      toast({
-        title: "Error",
-        description: "Plan no disponible",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setLoading(true);
 
     try {
-      console.log('Obteniendo clave pública de Stripe...');
+      console.log('Creating checkout session via webhook...');
       
-      // Obtener la clave pública desde Supabase
-      const { data: keyData, error: keyError } = await supabase.functions.invoke('get-stripe-key', {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        body: { planName },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
           'Content-Type': 'application/json',
         },
       });
 
-      if (keyError || !keyData?.publicKey) {
-        throw new Error('No se pudo obtener la clave pública de Stripe');
-      }
-
-      const stripePublicKey = keyData.publicKey;
-      
-      // Verificar que tenemos una clave pública válida
-      if (!stripePublicKey || !stripePublicKey.startsWith('pk_')) {
-        throw new Error('Clave pública de Stripe no válida');
-      }
-      
-      console.log('Cargando Stripe...');
-      
-      // Cargar Stripe dinámicamente
-      const stripe = await loadStripe(stripePublicKey);
-      
-      if (!stripe) {
-        throw new Error('Error al cargar Stripe');
-      }
-
-      console.log('Redirigiendo a Stripe Checkout...');
-      
-      // Redirect directo a Stripe Checkout
-      const { error } = await stripe.redirectToCheckout({
-        lineItems: [{
-          price: priceId,
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${window.location.origin}/?canceled=true`,
-        customerEmail: user.email,
-      });
-
       if (error) {
-        console.error('Error en Stripe Checkout:', error);
-        throw new Error(error.message || 'Error en el checkout');
+        throw new Error(error.message || 'Error creating checkout session');
       }
+
+      if (!data?.url) {
+        throw new Error('No checkout URL received');
+      }
+
+      console.log('Redirecting to Stripe Checkout:', data.url);
+      
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
       
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
@@ -234,32 +190,3 @@ export const useSubscription = () => {
     loading,
   };
 };
-
-// Función para cargar Stripe dinámicamente
-const loadStripe = (publishableKey: string) => {
-  return new Promise<any>((resolve, reject) => {
-    if (window.Stripe) {
-      resolve(window.Stripe(publishableKey));
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://js.stripe.com/v3/';
-    script.onload = () => {
-      if (window.Stripe) {
-        resolve(window.Stripe(publishableKey));
-      } else {
-        reject(new Error('Stripe failed to load'));
-      }
-    };
-    script.onerror = () => reject(new Error('Failed to load Stripe'));
-    document.head.appendChild(script);
-  });
-};
-
-// Declaración global para TypeScript
-declare global {
-  interface Window {
-    Stripe: any;
-  }
-}
