@@ -47,7 +47,6 @@ export const createStripeCheckout = async (
   console.log('=== CREATE STRIPE CHECKOUT START ===');
   console.log('Plan name:', planName);
   console.log('Access token length:', accessToken?.length || 0);
-  console.log('Supabase URL:', supabase.supabaseUrl);
   
   try {
     console.log('🔄 Invoking create-checkout function...');
