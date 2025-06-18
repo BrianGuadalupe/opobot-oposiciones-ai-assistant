@@ -19,9 +19,6 @@ const PLAN_MAPPING = {
   "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
 };
 
-// Clave pública de Stripe - usar test key para desarrollo
-const STRIPE_PUBLIC_KEY = "pk_test_51RakBmG0tRQIugBe..."; // Reemplaza con tu clave de test
-
 export const useSubscription = () => {
   const { user, session } = useAuth();
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
@@ -117,15 +114,31 @@ export const useSubscription = () => {
     setLoading(true);
 
     try {
-      console.log('Cargando Stripe...');
+      console.log('Obteniendo clave pública de Stripe...');
+      
+      // Obtener la clave pública desde Supabase
+      const { data: keyData, error: keyError } = await supabase.functions.invoke('get-stripe-key', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (keyError || !keyData?.publicKey) {
+        throw new Error('No se pudo obtener la clave pública de Stripe');
+      }
+
+      const stripePublicKey = keyData.publicKey;
       
       // Verificar que tenemos una clave pública válida
-      if (!STRIPE_PUBLIC_KEY || !STRIPE_PUBLIC_KEY.startsWith('pk_')) {
-        throw new Error('Clave pública de Stripe no configurada correctamente');
+      if (!stripePublicKey || !stripePublicKey.startsWith('pk_')) {
+        throw new Error('Clave pública de Stripe no válida');
       }
       
+      console.log('Cargando Stripe...');
+      
       // Cargar Stripe dinámicamente
-      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
+      const stripe = await loadStripe(stripePublicKey);
       
       if (!stripe) {
         throw new Error('Error al cargar Stripe');

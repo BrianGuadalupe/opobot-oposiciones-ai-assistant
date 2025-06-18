@@ -62,18 +62,11 @@ const Header = () => {
                 </Button>
               </div>
             ) : (
-              <>
-                <Link to="/auth">
-                  <Button variant="outline" className="hidden sm:inline-flex">
-                    Iniciar Sesión
-                  </Button>
-                </Link>
-                <Link to="/auth?mode=register">
-                  <Button className="bg-opobot-blue hover:bg-opobot-blue-dark">
-                    Comenzar Gratis
-                  </Button>
-                </Link>
-              </>
+              <Link to="/auth">
+                <Button className="bg-opobot-blue hover:bg-opobot-blue-dark">
+                  Iniciar Sesión
+                </Button>
+              </Link>
             )}
           </div>
         </div>
