@@ -12,6 +12,13 @@ export interface SubscriptionStatus {
   loading: boolean;
 }
 
+// Plan mapping con price IDs reales
+const PLAN_MAPPING = {
+  "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
+  "Profesional": "price_1RakGGG0tRQIugBefzFK7piu",
+  "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
+};
+
 export const useSubscription = () => {
   const { user, session } = useAuth();
   const [subscriptionStatus, setSubscriptionStatus] = useState<SubscriptionStatus>({
@@ -67,12 +74,9 @@ export const useSubscription = () => {
   }, [user, session]);
 
   const createCheckoutSession = async (planName: string) => {
-    console.log('=== CHECKOUT SESSION START ===');
+    console.log('=== CHECKOUT DIRECTO CON STRIPE ===');
     console.log('Plan:', planName);
     console.log('User:', !!user);
-    console.log('Session:', !!session);
-    console.log('User email:', user?.email);
-    console.log('Session token exists:', !!session?.access_token);
     
     // Redirect to auth if no user
     if (!user || !session || !validateSession(session)) {
@@ -96,81 +100,63 @@ export const useSubscription = () => {
       return;
     }
 
+    const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
+    if (!priceId) {
+      console.error('Plan no encontrado:', planName);
+      toast({
+        title: "Error",
+        description: "Plan no disponible",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      console.log('Starting checkout process...');
-      console.log('=== CALLING EDGE FUNCTION ===');
-      console.log('Function name: create-checkout');
-      console.log('Request body:', { planName });
+      console.log('Cargando Stripe...');
       
-      // Set a timeout for the function call
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Function call timeout')), 30000);
-      });
+      // Cargar Stripe dinámicamente
+      const stripe = await loadStripe('pk_live_51RakBmG0tRQIugBe4d1VdcamR7xzCyiCLJnNKqGEWsZ4YLWe7L5TK8wNiFfocW8EjdKhS7xoILWRlXH2xJclPG1o00WsqLgvhD');
+      
+      if (!stripe) {
+        throw new Error('Error al cargar Stripe');
+      }
 
-      const functionPromise = supabase.functions.invoke('create-checkout', {
-        body: { planName },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
+      console.log('Redirigiendo a Stripe Checkout...');
+      
+      // Redirect directo a Stripe Checkout
+      const { error } = await stripe.redirectToCheckout({
+        lineItems: [{
+          price: priceId,
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${window.location.origin}/?canceled=true`,
+        customerEmail: user.email,
+        metadata: {
+          user_id: user.id,
+          plan_name: planName,
         },
       });
 
-      console.log('Waiting for function response...');
-      
-      const { data, error } = await Promise.race([functionPromise, timeoutPromise]) as any;
-
-      console.log('=== RESPONSE RECEIVED ===');
-      console.log('Error:', error);
-      console.log('Data:', data);
-      console.log('Data type:', typeof data);
-      console.log('Data keys:', data ? Object.keys(data) : 'no data');
-
       if (error) {
-        console.error('Edge function error:', error);
-        console.error('Error type:', typeof error);
-        console.error('Error properties:', Object.keys(error));
-        throw new Error(error.message || 'Error en el servidor');
+        console.error('Error en Stripe Checkout:', error);
+        throw new Error(error.message || 'Error en el checkout');
       }
-
-      if (!data) {
-        console.error('No data received from function');
-        throw new Error('No se recibió respuesta del servidor');
-      }
-
-      if (!data.url) {
-        console.error('No URL in response:', data);
-        throw new Error('No se recibió URL de checkout');
-      }
-
-      console.log('=== REDIRECTING TO STRIPE ===');
-      console.log('Checkout URL:', data.url);
-      
-      // Redirect to Stripe checkout
-      window.location.href = data.url;
       
     } catch (error) {
       console.error('=== CHECKOUT ERROR ===');
       console.error('Error:', error);
-      console.error('Error type:', typeof error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       
-      if (error instanceof Error && error.message === 'Function call timeout') {
-        toast({
-          title: "Timeout",
-          description: "La función tardó demasiado en responder. Por favor, inténtalo de nuevo.",
-          variant: "destructive",
-        });
-      } else {
-        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-        
-        toast({
-          title: "Error de Pago",
-          description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
-          variant: "destructive",
-        });
-      }
+      const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+      
+      toast({
+        title: "Error de Pago",
+        description: `No se pudo iniciar el proceso de pago: ${errorMessage}`,
+        variant: "destructive",
+      });
     } finally {
       console.log('=== CHECKOUT COMPLETE ===');
       setLoading(false);
@@ -231,3 +217,32 @@ export const useSubscription = () => {
     loading,
   };
 };
+
+// Función para cargar Stripe dinámicamente
+const loadStripe = (publishableKey: string) => {
+  return new Promise<any>((resolve, reject) => {
+    if (window.Stripe) {
+      resolve(window.Stripe(publishableKey));
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = 'https://js.stripe.com/v3/';
+    script.onload = () => {
+      if (window.Stripe) {
+        resolve(window.Stripe(publishableKey));
+      } else {
+        reject(new Error('Stripe failed to load'));
+      }
+    };
+    script.onerror = () => reject(new Error('Failed to load Stripe'));
+    document.head.appendChild(script);
+  });
+};
+
+// Declaración global para TypeScript
+declare global {
+  interface Window {
+    Stripe: any;
+  }
+}
