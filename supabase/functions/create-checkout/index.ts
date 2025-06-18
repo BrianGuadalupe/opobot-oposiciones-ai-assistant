@@ -27,9 +27,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  if (req.method !== "POST") {
+  // Accept both POST and GET for debugging (though POST is preferred)
+  if (req.method !== "POST" && req.method !== "GET") {
     logStep("ERROR: Invalid method", { method: req.method });
-    return new Response("Method not allowed", { status: 405 });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { 
+      status: 405,
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
   }
 
   try {
@@ -102,20 +106,28 @@ serve(async (req) => {
     logStep("User authenticated successfully", { userId: user.id, email: user.email });
 
     // 3. OBTENER DATOS DEL REQUEST
-    logStep("Reading request body");
-    let requestBody;
-    try {
-      requestBody = await req.json();
-      logStep("Request body parsed", requestBody);
-    } catch (error) {
-      logStep("ERROR: Failed to parse request body", { error: error.message });
-      return new Response(JSON.stringify({ error: "Invalid request body" }), { 
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
+    let planName;
+    if (req.method === "POST") {
+      logStep("Reading request body");
+      let requestBody;
+      try {
+        requestBody = await req.json();
+        logStep("Request body parsed", requestBody);
+        planName = requestBody.planName;
+      } catch (error) {
+        logStep("ERROR: Failed to parse request body", { error: error.message });
+        return new Response(JSON.stringify({ error: "Invalid request body" }), { 
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    } else {
+      // For GET requests, get planName from query params
+      const url = new URL(req.url);
+      planName = url.searchParams.get('planName') || 'Profesional';
+      logStep("Using query param planName", { planName });
     }
 
-    const { planName } = requestBody;
     logStep("Plan validation", { planName, planType: typeof planName });
 
     if (!planName) {
