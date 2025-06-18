@@ -19,6 +19,7 @@ export const useSubscription = () => {
     loading: true,
   });
   const [loading, setLoading] = useState(false);
+  const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
 
   const checkSubscription = useCallback(async () => {
     // Wait for auth to be fully loaded
@@ -28,6 +29,12 @@ export const useSubscription = () => {
         subscribed: false,
         loading: false,
       });
+      return;
+    }
+
+    // Prevent multiple simultaneous calls
+    if (subscriptionStatus.loading) {
+      console.log('Subscription check already in progress, skipping...');
       return;
     }
 
@@ -61,6 +68,8 @@ export const useSubscription = () => {
         subscription_end: data.subscription_end,
         loading: false,
       });
+      
+      setHasCheckedSubscription(true);
     } catch (error) {
       console.error('Error checking subscription:', error);
       handleSecureError(error, 'Error al verificar el estado de la suscripción');
@@ -68,8 +77,9 @@ export const useSubscription = () => {
         subscribed: false,
         loading: false,
       });
+      setHasCheckedSubscription(true);
     }
-  }, [user, session]);
+  }, [user, session?.access_token, subscriptionStatus.loading]);
 
   const createCheckoutSession = async (planName: string) => {
     console.log('=== WEBHOOK CHECKOUT SESSION ===');
@@ -184,13 +194,13 @@ export const useSubscription = () => {
     }
   };
 
-  // Only run checkSubscription when we have a complete session
+  // Only run checkSubscription once when we have a complete session
   useEffect(() => {
-    if (user && session?.access_token) {
+    if (user && session?.access_token && !hasCheckedSubscription) {
       console.log('Auth complete, checking subscription...');
       checkSubscription();
     }
-  }, [user, session?.access_token, checkSubscription]);
+  }, [user, session?.access_token, hasCheckedSubscription, checkSubscription]);
 
   return {
     ...subscriptionStatus,
