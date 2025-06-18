@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -125,7 +124,7 @@ export const useSubscription = () => {
 
       console.log('Redirigiendo a Stripe Checkout...');
       
-      // Redirect directo a Stripe Checkout
+      // Redirect directo a Stripe Checkout sin metadata
       const { error } = await stripe.redirectToCheckout({
         lineItems: [{
           price: priceId,
@@ -135,10 +134,6 @@ export const useSubscription = () => {
         successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancelUrl: `${window.location.origin}/?canceled=true`,
         customerEmail: user.email,
-        metadata: {
-          user_id: user.id,
-          plan_name: planName,
-        },
       });
 
       if (error) {
