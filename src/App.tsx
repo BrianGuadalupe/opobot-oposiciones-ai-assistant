@@ -20,13 +20,11 @@ const queryClient = new QueryClient({
         console.error('Query failed:', { failureCount, error });
         return failureCount < 3;
       },
-      onError: (error) => {
-        console.error('Query error:', error);
-      },
     },
     mutations: {
-      onError: (error) => {
-        console.error('Mutation error:', error);
+      retry: (failureCount, error) => {
+        console.error('Mutation failed:', { failureCount, error });
+        return failureCount < 2;
       },
     },
   },
