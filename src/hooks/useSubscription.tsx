@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
 import { checkSubscriptionStatus } from '@/utils/subscriptionApi';
+import { supabase } from '@/integrations/supabase/client';
 import type { SubscriptionStatus } from '@/types/subscription';
 
 export const useSubscription = () => {
