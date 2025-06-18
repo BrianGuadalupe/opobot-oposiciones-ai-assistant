@@ -1,13 +1,13 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Lock, Star, CheckCircle, CreditCard } from "lucide-react";
+import { Lock, Star, CheckCircle, ExternalLink } from "lucide-react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 
 const SubscriptionRequired = () => {
   const { user } = useAuth();
-  const { createCheckoutSession, loading } = useSubscription();
+  const { redirectToStripeCheckout } = useSubscription();
 
   // Frontend: Solo datos de presentación (no críticos)
   const plans = [
@@ -50,13 +50,10 @@ const SubscriptionRequired = () => {
     }
   ];
 
-  const handleSubscribe = async (planName: string) => {
+  const handleSubscribe = (planName: string) => {
     console.log('=== SUBSCRIPTION REQUIRED - SUBSCRIBE CLICKED ===');
     console.log('Plan name:', planName);
     console.log('User exists:', !!user);
-    console.log('User ID:', user?.id);
-    console.log('User email:', user?.email);
-    console.log('Loading state:', loading);
     
     if (!user) {
       console.log('No user found, redirecting to registration');
@@ -64,18 +61,12 @@ const SubscriptionRequired = () => {
       return;
     }
     
-    console.log('Calling createCheckoutSession...');
-    try {
-      await createCheckoutSession(planName);
-      console.log('✅ CreateCheckoutSession completed');
-    } catch (error) {
-      console.error('❌ CreateCheckoutSession failed:', error);
-    }
+    console.log('Redirecting to external Stripe checkout...');
+    redirectToStripeCheckout(planName);
   };
 
   console.log('=== SUBSCRIPTION REQUIRED RENDER ===');
   console.log('User:', !!user);
-  console.log('Loading:', loading);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-opobot-blue to-opobot-green flex items-center justify-center p-4">
@@ -139,7 +130,6 @@ const SubscriptionRequired = () => {
                     console.log('Button clicked for plan:', plan.name);
                     handleSubscribe(plan.name);
                   }}
-                  disabled={loading}
                   className={`w-full rounded-lg text-base shadow-sm ${
                     plan.popular 
                       ? 'bg-opobot-blue hover:bg-opobot-blue-dark' 
@@ -147,8 +137,8 @@ const SubscriptionRequired = () => {
                   }`}
                   size="lg"
                 >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  {loading ? 'Procesando...' : 'Suscribirse Ahora'}
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Suscribirse Ahora
                 </Button>
               </CardContent>
             </Card>

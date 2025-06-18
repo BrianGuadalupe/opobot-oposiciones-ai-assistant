@@ -1,16 +1,15 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle, Star, CreditCard, Settings } from "lucide-react";
+import { CheckCircle, Star, ExternalLink, Settings } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import AcademyContactModal from "./AcademyContactModal";
 import { useState } from "react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
 
 const Pricing = () => {
   const { user } = useAuth();
-  const { subscribed, subscription_tier, createCheckoutSession, openCustomerPortal, loading } = useSubscription();
+  const { subscribed, subscription_tier, redirectToStripeCheckout, openCustomerPortal } = useSubscription();
   
   // Frontend: Solo datos de presentación (no críticos)
   const plans = [
@@ -59,16 +58,19 @@ const Pricing = () => {
     }
   ];
 
-  const [modalOpen, setModalOpen] = useState(false);
-
-  const handleSubscribe = async (planName: string) => {
+  const handleSubscribe = (planName: string) => {
+    console.log('=== PRICING - SUBSCRIBE CLICKED ===');
+    console.log('Plan:', planName);
+    console.log('User authenticated:', !!user);
+    
     if (!user) {
+      console.log('Redirecting to auth for registration');
       window.location.href = '/auth?mode=register';
       return;
     }
 
-    // Solo enviamos el nombre del plan - híbrida segura
-    await createCheckoutSession(planName);
+    // Redirigir directamente a Stripe Checkout externo
+    redirectToStripeCheckout(planName);
   };
 
   const isCurrentPlan = (planName: string) => {
@@ -161,17 +163,7 @@ const Pricing = () => {
                     ))}
                   </ul>
                   
-                  {plan.name === 'Academias' ? (
-                    <Button 
-                      onClick={() => handleSubscribe(plan.name)}
-                      disabled={loading}
-                      className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
-                      size="lg"
-                    >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      {user ? (loading ? 'Cargando...' : 'Suscribirse') : 'Comenzar Gratis'}
-                    </Button>
-                  ) : isCurrent ? (
+                  {isCurrent ? (
                     <Button 
                       onClick={openCustomerPortal}
                       variant="outline"
@@ -184,12 +176,11 @@ const Pricing = () => {
                   ) : (
                     <Button 
                       onClick={() => handleSubscribe(plan.name)}
-                      disabled={loading}
                       className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
                       size="lg"
                     >
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      {user ? (loading ? 'Cargando...' : 'Suscribirse') : 'Comenzar Gratis'}
+                      <ExternalLink className="w-4 h-4 mr-2" />
+                      {user ? 'Suscribirse' : 'Comenzar Gratis'}
                     </Button>
                   )}
                 </CardContent>
@@ -197,8 +188,6 @@ const Pricing = () => {
             );
           })}
         </div>
-
-        <AcademyContactModal open={modalOpen} onOpenChange={setModalOpen} />
 
         <div className="text-center mt-12">
           <Button
