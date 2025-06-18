@@ -51,8 +51,12 @@ const SubscriptionRequired = () => {
   ];
 
   const handleSubscribe = async (planName: string) => {
-    console.log('Subscribe button clicked for plan:', planName);
-    console.log('User authenticated:', !!user);
+    console.log('=== SUBSCRIPTION REQUIRED - SUBSCRIBE CLICKED ===');
+    console.log('Plan name:', planName);
+    console.log('User exists:', !!user);
+    console.log('User ID:', user?.id);
+    console.log('User email:', user?.email);
+    console.log('Loading state:', loading);
     
     if (!user) {
       console.log('No user found, redirecting to registration');
@@ -60,10 +64,18 @@ const SubscriptionRequired = () => {
       return;
     }
     
-    console.log('Calling createCheckoutSession with planName:', planName);
-    // Solo enviamos el nombre del plan - híbrida segura
-    await createCheckoutSession(planName);
+    console.log('Calling createCheckoutSession...');
+    try {
+      await createCheckoutSession(planName);
+      console.log('✅ CreateCheckoutSession completed');
+    } catch (error) {
+      console.error('❌ CreateCheckoutSession failed:', error);
+    }
   };
+
+  console.log('=== SUBSCRIPTION REQUIRED RENDER ===');
+  console.log('User:', !!user);
+  console.log('Loading:', loading);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-opobot-blue to-opobot-green flex items-center justify-center p-4">
@@ -123,7 +135,10 @@ const SubscriptionRequired = () => {
                 </ul>
                 
                 <Button 
-                  onClick={() => handleSubscribe(plan.name)}
+                  onClick={() => {
+                    console.log('Button clicked for plan:', plan.name);
+                    handleSubscribe(plan.name);
+                  }}
                   disabled={loading}
                   className={`w-full rounded-lg text-base shadow-sm ${
                     plan.popular 
