@@ -1,3 +1,4 @@
+
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { LogOut, User, MessageCircle } from "lucide-react";
@@ -62,14 +63,16 @@ const Header = () => {
               </div>
             ) : (
               <>
-                <Button variant="outline" className="hidden sm:inline-flex">
-                  <a href="/auth">Iniciar Sesión</a>
-                </Button>
-                <a href="/auth?mode=register" tabIndex={-1}>
+                <Link to="/auth">
+                  <Button variant="outline" className="hidden sm:inline-flex">
+                    Iniciar Sesión
+                  </Button>
+                </Link>
+                <Link to="/auth?mode=register">
                   <Button className="bg-opobot-blue hover:bg-opobot-blue-dark">
                     Comenzar Gratis
                   </Button>
-                </a>
+                </Link>
               </>
             )}
           </div>
