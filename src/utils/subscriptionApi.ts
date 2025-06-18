@@ -47,10 +47,18 @@ export const createStripeCheckout = async (
   console.log('=== CREATE STRIPE CHECKOUT START ===');
   console.log('Plan name:', planName);
   console.log('Access token length:', accessToken?.length || 0);
+  console.log('Supabase URL:', 'https://dozaqjmdoblwqnuprxnq.supabase.co');
   
   try {
     console.log('🔄 Invoking create-checkout function...');
+    console.log('Function URL: https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/create-checkout');
+    console.log('Request body:', { planName });
+    console.log('Request headers:', {
+      Authorization: `Bearer ${accessToken.substring(0, 20)}...`,
+      'Content-Type': 'application/json',
+    });
     
+    const startTime = Date.now();
     const { data, error } = await supabase.functions.invoke('create-checkout', {
       body: { planName },
       headers: {
@@ -58,12 +66,27 @@ export const createStripeCheckout = async (
         'Content-Type': 'application/json',
       },
     });
+    const endTime = Date.now();
 
+    console.log('Function call completed in:', endTime - startTime, 'ms');
     console.log('Create checkout raw response:', { data, error });
 
     if (error) {
       console.error('❌ Supabase function error:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Check if it's a network error
+      if (error.message?.includes('fetch')) {
+        console.error('🌐 Network error detected');
+        throw new Error('Error de conectividad. Verifica tu conexión a internet.');
+      }
+      
+      // Check if it's a function not found error
+      if (error.message?.includes('404') || error.message?.includes('not found')) {
+        console.error('🔍 Function not found error');
+        throw new Error('Función de checkout no encontrada. Contacta soporte.');
+      }
+      
       throw new Error(error.message || 'Error creating checkout session');
     }
 
@@ -84,6 +107,14 @@ export const createStripeCheckout = async (
     return data;
   } catch (error) {
     console.error('❌ Create checkout failed:', error);
+    
+    // Additional error context
+    if (error instanceof Error) {
+      console.error('Error name:', error.name);
+      console.error('Error message:', error.message);
+      console.error('Error stack:', error.stack);
+    }
+    
     throw error;
   }
 };
