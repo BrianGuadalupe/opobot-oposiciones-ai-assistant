@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
@@ -17,6 +18,9 @@ const PLAN_MAPPING = {
   "Profesional": "price_1RakGGG0tRQIugBefzFK7piu",
   "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
 };
+
+// Clave pública de Stripe - usar test key para desarrollo
+const STRIPE_PUBLIC_KEY = "pk_test_51RakBmG0tRQIugBe..."; // Reemplaza con tu clave de test
 
 export const useSubscription = () => {
   const { user, session } = useAuth();
@@ -115,8 +119,13 @@ export const useSubscription = () => {
     try {
       console.log('Cargando Stripe...');
       
+      // Verificar que tenemos una clave pública válida
+      if (!STRIPE_PUBLIC_KEY || !STRIPE_PUBLIC_KEY.startsWith('pk_')) {
+        throw new Error('Clave pública de Stripe no configurada correctamente');
+      }
+      
       // Cargar Stripe dinámicamente
-      const stripe = await loadStripe('pk_live_51RakBmG0tRQIugBe4d1VdcamR7xzCyiCLJnNKqGEWsZ4YLWe7L5TK8wNiFfocW8EjdKhS7xoILWRlXH2xJclPG1o00WsqLgvhD');
+      const stripe = await loadStripe(STRIPE_PUBLIC_KEY);
       
       if (!stripe) {
         throw new Error('Error al cargar Stripe');
@@ -124,7 +133,7 @@ export const useSubscription = () => {
 
       console.log('Redirigiendo a Stripe Checkout...');
       
-      // Redirect directo a Stripe Checkout sin metadata
+      // Redirect directo a Stripe Checkout
       const { error } = await stripe.redirectToCheckout({
         lineItems: [{
           price: priceId,
