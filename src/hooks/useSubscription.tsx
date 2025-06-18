@@ -2,7 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
-import { checkSubscriptionStatus } from '@/utils/subscriptionApi';
+import { checkSubscriptionStatus, createStripeCheckout } from '@/utils/subscriptionApi';
 import { supabase } from '@/integrations/supabase/client';
 import type { SubscriptionStatus } from '@/types/subscription';
 
@@ -56,27 +56,31 @@ export const useSubscription = () => {
     }
   }, [user, session?.access_token, subscriptionStatus.loading]);
 
-  // Solo redirigir a Stripe Checkout externo - sin crear sesiones
-  const redirectToStripeCheckout = (planName: string) => {
-    console.log('=== REDIRECTING TO EXTERNAL STRIPE CHECKOUT ===');
+  // Usar la función create-checkout para crear sesiones con webhooks
+  const redirectToStripeCheckout = async (planName: string) => {
+    console.log('=== CREATING STRIPE CHECKOUT SESSION ===');
     console.log('Plan:', planName);
     
-    // URLs directas de Stripe Checkout (configuradas en tu dashboard de Stripe)
-    const checkoutUrls = {
-      'Básico': 'https://buy.stripe.com/basic-plan-url', // Reemplaza con tu URL real
-      'Profesional': 'https://buy.stripe.com/pro-plan-url', // Reemplaza con tu URL real  
-      'Academias': 'https://buy.stripe.com/academy-plan-url' // Reemplaza con tu URL real
-    };
-    
-    const checkoutUrl = checkoutUrls[planName as keyof typeof checkoutUrls];
-    
-    if (!checkoutUrl) {
-      console.error('No checkout URL found for plan:', planName);
+    if (!user || !session?.access_token) {
+      console.log('No user session for checkout');
       return;
     }
-    
-    console.log('Redirecting to:', checkoutUrl);
-    window.open(checkoutUrl, '_blank', 'noopener,noreferrer');
+
+    try {
+      console.log('Creating checkout session via Supabase function...');
+      const data = await createStripeCheckout(planName, session.access_token);
+      
+      if (data?.url) {
+        console.log('Redirecting to Stripe Checkout:', data.url);
+        window.location.href = data.url;
+      } else {
+        console.error('No checkout URL received');
+        handleSecureError(new Error('No checkout URL received'), 'Error al crear la sesión de pago');
+      }
+    } catch (error) {
+      console.error('Error creating checkout session:', error);
+      handleSecureError(error, 'Error al crear la sesión de pago');
+    }
   };
 
   // Customer portal sigue igual ya que no interfiere con webhooks
