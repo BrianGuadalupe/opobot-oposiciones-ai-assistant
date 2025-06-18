@@ -46,7 +46,6 @@ serve(async (req) => {
       hasSupabaseKey: !!supabaseKey,
       hasStripeKey: !!stripeKey,
       stripeKeyStart: stripeKey ? stripeKey.substring(0, 8) : "MISSING",
-      supabaseUrlStart: supabaseUrl ? supabaseUrl.substring(0, 30) : "MISSING"
     });
 
     if (!supabaseUrl || !supabaseKey || !stripeKey) {
@@ -63,6 +62,15 @@ serve(async (req) => {
     try {
       const bodyText = await req.text();
       console.log(`[${Date.now() - startTime}ms] Raw body:`, bodyText);
+      
+      if (!bodyText || bodyText.trim() === '') {
+        console.error(`[${Date.now() - startTime}ms] Empty body received`);
+        return new Response(JSON.stringify({ error: "Empty request body" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
+      
       requestBody = JSON.parse(bodyText);
       console.log(`[${Date.now() - startTime}ms] Parsed body:`, requestBody);
     } catch (error) {
@@ -99,7 +107,7 @@ serve(async (req) => {
 
     console.log(`[${Date.now() - startTime}ms] 5. Price ID:`, priceId);
 
-    // Simplificar autenticación - solo obtener email del header
+    // Obtener usuario autenticado
     console.log(`[${Date.now() - startTime}ms] 6. Getting user info...`);
     const authHeader = req.headers.get("Authorization");
     console.log(`[${Date.now() - startTime}ms] Auth header exists:`, !!authHeader);
