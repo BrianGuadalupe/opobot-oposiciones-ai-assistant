@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { useSubscription } from '@/hooks/useSubscription';
 import { useNavigate } from 'react-router-dom';
 
 interface ProtectedRouteProps {
@@ -11,6 +11,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRouteProps) => {
   const { user, session } = useAuth();
+  const { subscribed, loading: subscriptionLoading, checkSubscription } = useSubscription();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
@@ -21,6 +22,8 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
       console.log('User:', !!user);
       console.log('Session:', !!session);
       console.log('Require subscription:', requireSubscription);
+      console.log('Subscribed:', subscribed);
+      console.log('Subscription loading:', subscriptionLoading);
 
       if (!user || !session) {
         console.log('No user or session, redirecting to auth');
@@ -35,106 +38,62 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
         return;
       }
 
-      try {
-        console.log('Checking subscription status with Stripe...');
+      // Wait for subscription check to complete
+      if (subscriptionLoading) {
+        console.log('Subscription still loading, waiting...');
+        return;
+      }
+
+      // If subscription is required, check if user is subscribed
+      if (subscribed) {
+        console.log('User is subscribed, granting access');
+        setHasAccess(true);
+      } else {
+        console.log('User is not subscribed, checking for demo user...');
         
-        // Usar timeout con Promise.race para la verificación en ProtectedRoute
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Subscription check timeout')), 6000);
-        });
-        
-        const subscriptionPromise = supabase.functions.invoke('check-subscription', {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        });
-        
-        const { data: refreshData, error: refreshError } = await Promise.race([
-          subscriptionPromise,
-          timeoutPromise
-        ]) as any;
-        
-        if (refreshError) {
-          console.error('Error checking subscription:', refreshError);
-          
-          // Verificar si es usuario demo
-          console.log('Checking demo user status...');
+        // Check for demo user as fallback
+        try {
+          const { supabase } = await import('@/integrations/supabase/client');
           const { data: usageData, error: usageError } = await supabase
             .from('user_usage')
             .select('is_demo_user, subscription_tier, queries_remaining_this_month')
             .eq('user_id', user.id)
             .single();
 
-          if (!usageError && usageData?.is_demo_user) {
-            console.log('Demo user detected, checking remaining queries');
-            if (usageData.queries_remaining_this_month > 0) {
-              console.log('Demo user has queries remaining, granting access');
-              setHasAccess(true);
-            } else {
-              console.log('Demo user has no queries remaining, redirecting with demo_expired');
-              navigate('/?demo_expired=true');
-              return;
-            }
+          if (!usageError && usageData?.is_demo_user && usageData.queries_remaining_this_month > 0) {
+            console.log('Demo user has queries remaining, granting access');
+            setHasAccess(true);
+          } else if (!usageError && usageData?.is_demo_user && usageData.queries_remaining_this_month <= 0) {
+            console.log('Demo user has no queries remaining, redirecting with demo_expired');
+            navigate('/?demo_expired=true');
+            return;
           } else {
+            console.log('User is not subscribed and not demo, redirecting with subscription_required');
             navigate('/?subscription_required=true');
             return;
           }
-        } else {
-          console.log('Subscription data:', refreshData);
-          if (refreshData?.subscribed) {
-            setHasAccess(true);
-          } else {
-            // Verificar si es usuario demo como fallback
-            const { data: usageData, error: usageError } = await supabase
-              .from('user_usage')
-              .select('is_demo_user, subscription_tier, queries_remaining_this_month')
-              .eq('user_id', user.id)
-              .single();
-
-            if (!usageError && usageData?.is_demo_user && usageData.queries_remaining_this_month > 0) {
-              console.log('Demo user has queries remaining, granting access');
-              setHasAccess(true);
-            } else {
-              navigate('/?subscription_required=true');
-              return;
-            }
-          }
+        } catch (error) {
+          console.error('Error checking demo user status:', error);
+          navigate('/?subscription_required=true');
+          return;
         }
-      } catch (error) {
-        console.error('Unexpected error checking access:', error);
-        
-        // Si es timeout, verificar si es usuario demo
-        if (error instanceof Error && error.message.includes('timeout')) {
-          console.log('Timeout in access check, trying demo user fallback...');
-          try {
-            const { data: usageData, error: usageError } = await supabase
-              .from('user_usage')
-              .select('is_demo_user, subscription_tier, queries_remaining_this_month')
-              .eq('user_id', user.id)
-              .single();
-
-            if (!usageError && usageData?.is_demo_user && usageData.queries_remaining_this_month > 0) {
-              console.log('Demo user has queries remaining, granting access after timeout');
-              setHasAccess(true);
-              setIsLoading(false);
-              return;
-            }
-          } catch (demoError) {
-            console.log('Demo fallback failed:', demoError);
-          }
-        }
-        
-        navigate('/?subscription_required=true');
-        return;
-      } finally {
-        setIsLoading(false);
       }
+
+      setIsLoading(false);
     };
 
     checkAccess();
-  }, [user, session, navigate, requireSubscription]);
+  }, [user, session, navigate, requireSubscription, subscribed, subscriptionLoading]);
 
-  if (isLoading) {
+  // Trigger subscription check when component mounts if user is authenticated
+  useEffect(() => {
+    if (user && session && requireSubscription && !subscriptionLoading) {
+      console.log('Triggering subscription check for protected route');
+      checkSubscription(false);
+    }
+  }, [user, session, requireSubscription, checkSubscription, subscriptionLoading]);
+
+  if (isLoading || subscriptionLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-opobot-blue"></div>
