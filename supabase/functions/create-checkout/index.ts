@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -38,12 +37,14 @@ serve(async (req) => {
     logStep("1. Verificando variables de entorno");
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     
     logStep("Variables de entorno", {
       hasStripeKey: !!stripeKey,
       stripeKeyPrefix: stripeKey ? stripeKey.substring(0, 10) + "..." : "NO_ENCONTRADA",
       hasSupabaseUrl: !!supabaseUrl,
+      hasSupabaseServiceKey: !!supabaseServiceKey,
       hasSupabaseAnonKey: !!supabaseAnonKey,
       supabaseUrl: supabaseUrl
     });
@@ -59,7 +60,7 @@ serve(async (req) => {
       });
     }
 
-    if (!supabaseUrl || !supabaseAnonKey) {
+    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
       logStep("ERROR CRÍTICO: Variables de Supabase no encontradas");
       return new Response(JSON.stringify({ 
         error: "Configuración del servidor incompleta: Variables de Supabase faltantes"
@@ -69,10 +70,15 @@ serve(async (req) => {
       });
     }
 
-    logStep("2. Creando cliente de Supabase");
+    logStep("2. Creando cliente de Supabase para autenticación");
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+    
+    logStep("3. Creando cliente de Supabase con Service Role para DB writes");
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: { persistSession: false }
+    });
 
-    logStep("3. Verificando autenticación");
+    logStep("4. Verificando autenticación");
     const authHeader = req.headers.get("Authorization");
     logStep("Header de autorización", { 
       hasAuthHeader: !!authHeader,
@@ -94,7 +100,7 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     logStep("Token extraído", { tokenLength: token.length });
     
-    logStep("4. Obteniendo usuario autenticado");
+    logStep("5. Obteniendo usuario autenticado");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     
     logStep("Resultado de autenticación", { 
@@ -209,7 +215,30 @@ serve(async (req) => {
       logStep("Nuevo cliente creado", { customerId });
     }
 
-    logStep("9. Preparando sesión de checkout");
+    // 🔑 NUEVO: Guardar stripe_customer_id en la base de datos inmediatamente
+    logStep("9. Guardando stripe_customer_id en la base de datos");
+    console.log('🔑 stripe_customer_id a guardar:', customerId);
+    
+    const { error: upsertError } = await supabaseAdmin
+      .from('subscribers')
+      .upsert({
+        user_id: user.id,
+        email: user.email,
+        stripe_customer_id: customerId,
+        updated_at: new Date().toISOString(),
+      }, { 
+        onConflict: 'email',
+        ignoreDuplicates: false 
+      });
+
+    if (upsertError) {
+      logStep("ERROR: No se pudo guardar stripe_customer_id", { error: upsertError });
+      // Continuar aunque falle el guardado, pero loguearlo
+    } else {
+      logStep("✅ stripe_customer_id guardado exitosamente", { customerId, userId: user.id });
+    }
+
+    logStep("10. Preparando sesión de checkout");
     const origin = req.headers.get("origin") || req.headers.get("referer") || "https://dozaqjmdoblwqnuprxnq.supabase.co";
     const sessionConfig = {
       customer: customerId,
@@ -240,7 +269,7 @@ serve(async (req) => {
     
     logStep("Configuración de sesión preparada", sessionConfig);
 
-    logStep("10. Creando sesión de checkout de Stripe");
+    logStep("11. Creando sesión de checkout de Stripe");
     try {
       const session = await stripe.checkout.sessions.create(sessionConfig);
 

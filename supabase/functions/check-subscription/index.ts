@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -105,7 +104,7 @@ serve(async (req) => {
     }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Buscar el stripe_customer_id desde la base de datos primero
+    // Buscar el stripe_customer_id desde la base de datos PRIMERO
     logStep("Looking up subscriber record in database");
     const { data: subscriberData, error: subscriberError } = await supabaseClient
       .from('subscribers')
@@ -124,7 +123,7 @@ serve(async (req) => {
     });
     
     let customerId = subscriberData?.stripe_customer_id;
-    console.log('👤 stripe_customer_id:', customerId);
+    console.log('🔑 stripe_customer_id desde DB:', customerId);
     
     // Helper function para timeout manual
     const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
@@ -169,7 +168,8 @@ serve(async (req) => {
         customerId = customers.data[0].id;
         logStep("Found Stripe customer by email, saving to DB", { customerId });
         
-        // Guardar el customer_id en la DB para futuras consultas
+        // 🔑 NUEVO: Guardar el customer_id en la DB para futuras consultas
+        console.log('🔑 Guardando stripe_customer_id encontrado:', customerId);
         await supabaseClient.from("subscribers").upsert({
           email: user.email,
           user_id: user.id,
@@ -192,10 +192,12 @@ serve(async (req) => {
       }
     } else {
       logStep("Using stripe_customer_id from database", { customerId });
+      console.log('🔑 Usando stripe_customer_id desde cache:', customerId);
     }
 
     // Usar directamente el customer_id para buscar suscripciones (CORREGIDO)
     logStep("Checking subscriptions with customer_id");
+    console.log('🔍 Consultando suscripciones para customer:', customerId);
     
     let subscriptions;
     try {
