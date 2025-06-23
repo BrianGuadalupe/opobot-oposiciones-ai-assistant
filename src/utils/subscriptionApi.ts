@@ -26,7 +26,6 @@ export const checkSubscriptionStatus = async (
       throw new Error('Failed to check subscription status');
     }
 
-    // Validate response data
     if (!data || typeof data.subscribed !== 'boolean') {
       console.error('❌ Invalid subscription data received:', data);
       throw new Error('Invalid subscription data received');
@@ -50,7 +49,7 @@ export const createStripeCheckout = async (
   console.log('Supabase URL:', 'https://dozaqjmdoblwqnuprxnq.supabase.co');
   
   try {
-    console.log('🔄 Invoking create-checkout function...');
+    console.log('🔄 Invocando función create-checkout...');
     console.log('Function URL: https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/create-checkout');
     console.log('Request body:', { planName });
     console.log('Request headers:', {
@@ -68,47 +67,77 @@ export const createStripeCheckout = async (
     });
     const endTime = Date.now();
 
-    console.log('Function call completed in:', endTime - startTime, 'ms');
-    console.log('Create checkout raw response:', { data, error });
+    console.log('Function call completado en:', endTime - startTime, 'ms');
+    console.log('Create checkout respuesta completa:', { data, error });
 
     if (error) {
-      console.error('❌ Supabase function error:', error);
+      console.error('❌ Error de función Supabase:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       
-      // Check if it's a network error
+      // Mostrar toast con el error específico
+      toast({
+        title: "Error de Stripe Checkout",
+        description: error.message || 'Error desconocido al crear sesión de checkout',
+        variant: "destructive",
+      });
+      
+      // Análisis específico de errores comunes
       if (error.message?.includes('fetch')) {
-        console.error('🌐 Network error detected');
+        console.error('🌐 Error de red detectado');
         throw new Error('Error de conectividad. Verifica tu conexión a internet.');
       }
       
-      // Check if it's a function not found error
       if (error.message?.includes('404') || error.message?.includes('not found')) {
-        console.error('🔍 Function not found error');
+        console.error('🔍 Función no encontrada');
         throw new Error('Función de checkout no encontrada. Contacta soporte.');
+      }
+
+      if (error.message?.includes('authentication') || error.message?.includes('unauthorized')) {
+        console.error('🔐 Error de autenticación');
+        throw new Error('Error de autenticación. Inicia sesión nuevamente.');
       }
       
       throw new Error(error.message || 'Error creating checkout session');
     }
 
     if (!data) {
-      console.error('❌ No data received from create-checkout function');
+      console.error('❌ No se recibieron datos de create-checkout');
+      toast({
+        title: "Error",
+        description: "No se recibió respuesta del servidor",
+        variant: "destructive",
+      });
       throw new Error('No response data received');
     }
 
+    console.log('📦 Datos recibidos:', data);
+
     if (!data.url) {
-      console.error('❌ No checkout URL in response:', data);
+      console.error('❌ No hay URL de checkout en la respuesta:', data);
+      toast({
+        title: "Error de Stripe",
+        description: "No se pudo generar la URL de checkout",
+        variant: "destructive",
+      });
       throw new Error('No checkout URL received');
     }
 
-    console.log('✅ Checkout session created successfully');
+    console.log('✅ Sesión de checkout creada exitosamente');
     console.log('Checkout URL:', data.url);
     console.log('Session ID:', data.sessionId);
+
+    // Toast de éxito
+    toast({
+      title: "Redirigiendo a Stripe",
+      description: "Sesión de checkout creada correctamente",
+      variant: "default",
+    });
 
     return data;
   } catch (error) {
     console.error('❌ Create checkout failed:', error);
     
-    // Additional error context
+    // Log adicional para debugging
     if (error instanceof Error) {
       console.error('Error name:', error.name);
       console.error('Error message:', error.message);
