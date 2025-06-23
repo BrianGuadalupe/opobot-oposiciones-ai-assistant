@@ -30,27 +30,24 @@ const validateInput = (input: any): string | null => {
   return null;
 };
 
-// DUMMY RESPONSE TEMPORAL PARA TESTING - DESHABILITAR EN PRODUCCIÓN
-const ENABLE_DUMMY_RESPONSE = false;
-const DUMMY_RESPONSE = {
-  subscribed: true,
-  subscription_tier: "Profesional",
-  subscription_end: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() // 30 días
-};
-
 serve(async (req) => {
+  // Siempre imprimir el inicio
+  console.log('[🔍 CHECK-SUBSCRIPTION START]');
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   // Accept both GET and POST requests
   if (req.method !== "POST" && req.method !== "GET") {
+    console.log('[❌ INVALID METHOD]', req.method);
     return new Response(JSON.stringify({ error: "Method not allowed" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 405,
     });
   }
 
+  // USAR SERVICE ROLE KEY para operaciones de escritura
   const supabaseClient = createClient(
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -60,71 +57,55 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    // Verificar variables de entorno críticas
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
       logStep("ERROR: Stripe key not configured");
-      
-      // Si no hay clave de Stripe, devolver respuesta dummy si está habilitada
-      if (ENABLE_DUMMY_RESPONSE) {
-        logStep("Returning dummy response due to missing Stripe key");
-        return new Response(JSON.stringify(DUMMY_RESPONSE), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-      
       throw new Error("Service configuration error");
     }
     logStep("Stripe key verified");
 
+    // Verificar autorización
     const authHeader = req.headers.get("Authorization");
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       logStep("ERROR: Invalid authorization header");
-      throw new Error("Authentication required");
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
     
     const token = authHeader.replace("Bearer ", "");
     const inputValidation = validateInput(token);
     if (inputValidation) {
       logStep("ERROR: Invalid token format");
-      throw new Error("Invalid authentication token");
+      return new Response(JSON.stringify({ error: "Invalid authentication token" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
 
+    logStep("Authenticating user with token");
     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
     if (userError) {
       logStep("ERROR: Authentication failed", { error: userError.message });
-      throw new Error("Authentication failed");
+      return new Response(JSON.stringify({ error: "Authentication failed" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
     
     const user = userData.user;
     if (!user?.email) {
       logStep("ERROR: No user email available");
-      throw new Error("User authentication error");
+      return new Response(JSON.stringify({ error: "User authentication error" }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 401,
+      });
     }
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // RESPUESTA DUMMY TEMPORAL - ELIMINAR EN PRODUCCIÓN
-    if (ENABLE_DUMMY_RESPONSE) {
-      logStep("RETURNING DUMMY RESPONSE FOR TESTING - REMOVE IN PRODUCTION");
-      
-      // Actualizar base de datos con respuesta dummy
-      await supabaseClient.from("subscribers").upsert({
-        email: user.email,
-        user_id: user.id,
-        stripe_customer_id: "dummy_customer_id",
-        subscribed: DUMMY_RESPONSE.subscribed,
-        subscription_tier: DUMMY_RESPONSE.subscription_tier,
-        subscription_end: DUMMY_RESPONSE.subscription_end,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'email' });
-      
-      return new Response(JSON.stringify(DUMMY_RESPONSE), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
-    // OPTIMIZACIÓN: Buscar el stripe_customer_id desde la base de datos primero
+    // Buscar el stripe_customer_id desde la base de datos primero
     logStep("Looking up subscriber record in database");
     const { data: subscriberData, error: subscriberError } = await supabaseClient
       .from('subscribers')
@@ -132,15 +113,19 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    // Inicializar Stripe con debug activado y timeout configuración
+    if (subscriberError && subscriberError.code !== 'PGRST116') {
+      logStep("ERROR: Database query failed", { error: subscriberError.message });
+    }
+
+    // Inicializar Stripe con timeout configurado
     const stripe = new Stripe(stripeKey, { 
       apiVersion: "2023-10-16",
-      timeout: 4000, // 4 segundos timeout directo en Stripe SDK
+      timeout: 4000,
     });
     
     let customerId = subscriberData?.stripe_customer_id;
     
-    // Helper function para timeout manual adicional
+    // Helper function para timeout manual
     const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
@@ -151,10 +136,9 @@ serve(async (req) => {
 
     // Si no tenemos customer_id en la DB, buscar por email (solo la primera vez)
     if (!customerId) {
-      logStep("No stripe_customer_id found in DB, searching by email (first time setup)");
+      logStep("No stripe_customer_id found in DB, searching by email");
       
       try {
-        // Buscar customer con timeout de 3 segundos (solo cuando no está en DB)
         const customers = await withTimeout(
           stripe.customers.list({ 
             email: user.email, 
@@ -209,12 +193,11 @@ serve(async (req) => {
       logStep("Using stripe_customer_id from database", { customerId });
     }
 
-    // OPTIMIZACIÓN: Usar directamente el customer_id para buscar suscripciones
+    // Usar directamente el customer_id para buscar suscripciones
     logStep("Checking subscriptions with customer_id");
     
     let subscriptions;
     try {
-      // Buscar suscripciones activas con timeout de 3 segundos
       subscriptions = await withTimeout(
         stripe.subscriptions.list({
           customer: customerId,
@@ -307,22 +290,17 @@ serve(async (req) => {
 
     logStep("Updated database with subscription info", { subscribed: hasActiveSub, subscriptionTier });
     
+    console.log('[✅ CHECK-SUBSCRIPTION SUCCESS] Returning data:', finalSubscriptionData);
+    
     return new Response(JSON.stringify(finalSubscriptionData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
+    console.error('[🔥 UNCAUGHT ERROR in check-subscription]', errorMessage);
+    console.error('[🔥 ERROR STACK]', error instanceof Error ? error.stack : 'No stack trace');
     logStep("ERROR in check-subscription", { message: errorMessage });
-    
-    // En caso de error general, si dummy está habilitado, devolver respuesta dummy
-    if (ENABLE_DUMMY_RESPONSE && errorMessage.includes('timeout')) {
-      logStep("Returning dummy response due to timeout error");
-      return new Response(JSON.stringify(DUMMY_RESPONSE), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
     
     // Return generic error message to avoid information disclosure
     return new Response(JSON.stringify({ 
