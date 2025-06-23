@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import Features from "@/components/Features";
@@ -9,56 +10,35 @@ import Testimonials from "@/components/Testimonials";
 import Footer from "@/components/Footer";
 import ChatDemoExample from "@/components/ChatDemoExample";
 import SubscriptionRequired from "@/components/SubscriptionRequired";
-import DebugPanel from "@/components/DebugPanel";
-import NetworkDiagnosticPanel from "@/components/NetworkDiagnosticPanel";
 
 const Index = () => {
-  console.log('🏠 Index page rendered');
-  
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [showSubscriptionRequired, setShowSubscriptionRequired] = useState(false);
 
   useEffect(() => {
-    console.log('🔍 Index useEffect - checking URL params');
     const subscriptionRequired = searchParams.get('subscription_required');
-    console.log('Subscription required param:', subscriptionRequired);
-    
-    if (subscriptionRequired === 'true') {
-      console.log('✅ Setting showSubscriptionRequired to true');
+    if (subscriptionRequired === 'true' && user) {
       setShowSubscriptionRequired(true);
     }
-  }, [searchParams]);
+  }, [searchParams, user]);
 
-  console.log('📊 Index render state:', { showSubscriptionRequired });
-
+  // If user needs subscription, show the subscription required component
   if (showSubscriptionRequired) {
-    console.log('🔒 Rendering SubscriptionRequired component');
-    return (
-      <>
-        <SubscriptionRequired />
-        <DebugPanel />
-        <NetworkDiagnosticPanel />
-      </>
-    );
+    return <SubscriptionRequired />;
   }
 
-  console.log('🏡 Rendering main homepage');
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-white">
       <Header />
-      <Hero />
-      {/* Espacio entre hero y demo */}
-      <div className="h-6 md:h-12" />
-      <ChatDemoExample />
-      <div className="h-6 md:h-12" />
-      <Features />
-      <Pricing />
-      {/* Espacio para FAQ futura */}
-      <div className="h-10" />
-      <Testimonials />
+      <main className="pt-16">
+        <Hero />
+        <ChatDemoExample />
+        <Features />
+        <Pricing />
+        <Testimonials />
+      </main>
       <Footer />
-      <DebugPanel />
-      <NetworkDiagnosticPanel />
     </div>
   );
 };

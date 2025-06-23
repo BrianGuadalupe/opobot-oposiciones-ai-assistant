@@ -80,7 +80,7 @@ const SubscriptionRequired = () => {
               Suscripción Requerida
             </CardTitle>
             <p className="text-gray-600">
-              Para acceder a Opobot y todas sus funcionalidades, necesitas una suscripción activa.
+              Para acceder al Chat IA de Opobot, necesitas una suscripción activa. Elige tu plan y comienza a estudiar con nuestro asistente inteligente.
             </p>
           </CardHeader>
         </Card>
@@ -146,6 +146,9 @@ const SubscriptionRequired = () => {
         </div>
 
         <div className="text-center">
+          <p className="text-white/80 text-sm mb-4">
+            ¿Ya tienes una suscripción? Inicia sesión para acceder al chat.
+          </p>
           <Button
             variant="outline"
             onClick={() => window.location.href = '/'}
