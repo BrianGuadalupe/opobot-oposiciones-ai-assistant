@@ -8,19 +8,62 @@ schemas = ["public", "graphql_public"]
 extra_search_path = ["public", "extensions"]
 max_rows = 1000
 
-[db]
-port = 54322
-
-[studio]
+[graphql]
 enabled = true
-port = 54323
+port = 54329
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[inbound_email]
+enabled = false
+port = 54330
+smtp_port = 54325
+pop3_port = 54335
+
+[storage]
+enabled = true
+port = 54321
+file_size_limit = "50MiB"
+image_transformation = true
+
+[auth]
+enabled = true
+port = 54321
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+enable_email_confirmations = false
+enable_sms_confirmations = false
+
+[edge_functions]
+enabled = true
+port = 54321
+
+[functions.academy-contact]
+verify_jwt = false
+
+[functions.chat-opobot]
+verify_jwt = true
+
+[functions.check-subscription]
+verify_jwt = true
 
 [functions.create-checkout]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.get-stripe-key]
 verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
 
-[functions.check-subscription]
-
-[functions.customer-portal]
+[db]
+enabled = true
+port = 54322
+shadow_port = 54320
+major_version = 15
