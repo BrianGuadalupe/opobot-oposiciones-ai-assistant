@@ -26,8 +26,8 @@ export const useQueryLimits = () => {
 
   const checkQueryLimit = async (): Promise<LimitCheckResult> => {
     console.log('=== QUERY LIMIT CHECK START ===');
-    console.log('User:', !!user);
-    console.log('Session:', !!session);
+    console.log('User exists:', !!user);
+    console.log('Session exists:', !!session);
 
     if (!session || !user) {
       console.log('❌ No session or user for limit check');
@@ -41,7 +41,7 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
-      console.log('🔍 Invoking manage-usage function for check_limit...');
+      console.log('🔍 About to invoke manage-usage function for check_limit...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
@@ -49,12 +49,11 @@ export const useQueryLimits = () => {
         },
       });
 
-      console.log('📥 Manage-usage raw response:', { 
-        hasData: !!data, 
-        hasError: !!error,
-        dataKeys: data ? Object.keys(data) : [],
-        errorMessage: error?.message
-      });
+      console.log('📥 Manage-usage response received');
+      console.log('📥 Raw response data:', JSON.stringify(data, null, 2));
+      console.log('📥 Response error:', error);
+      console.log('📥 Data type:', typeof data);
+      console.log('📥 Data keys:', data ? Object.keys(data) : 'no data');
 
       if (error) {
         console.error('❌ Error in manage-usage function:', error);
@@ -64,23 +63,30 @@ export const useQueryLimits = () => {
       // Verificar que la respuesta tenga la estructura esperada
       if (!data || typeof data.canProceed === 'undefined') {
         console.error('❌ Invalid response structure from manage-usage:', data);
+        console.error('❌ Missing canProceed property');
         throw new Error('Respuesta inválida del servidor');
       }
 
-      console.log('✅ Manage-usage response processed:', {
-        canProceed: data.canProceed,
-        reason: data.reason,
-        hasUsageData: !!data.usageData
-      });
+      console.log('✅ Valid response structure confirmed');
+      console.log('✅ canProceed value:', data.canProceed);
+      console.log('✅ canProceed type:', typeof data.canProceed);
+      console.log('✅ reason:', data.reason);
 
-      const result: LimitCheckResult = data;
+      const result: LimitCheckResult = {
+        canProceed: Boolean(data.canProceed), // Asegurar que es boolean
+        reason: data.reason || 'unknown',
+        message: data.message,
+        usageData: data.usageData
+      };
+      
+      console.log('✅ Processed result:', JSON.stringify(result, null, 2));
       
       if (result.usageData) {
         setUsageData(result.usageData);
         console.log('📊 Updated usage data:', result.usageData);
       }
 
-      // Mostrar advertencias para demo
+      // Mostrar advertencias apropiadas
       if (result.reason === 'demo_warning_90') {
         toast({
           title: "⚠️ Demo - Límite Cercano",
@@ -97,7 +103,6 @@ export const useQueryLimits = () => {
         });
       }
 
-      // Mostrar advertencias para plan básico
       if (result.reason === 'warning_90') {
         toast({
           title: "⚠️ Límite de Consultas",
@@ -114,10 +119,11 @@ export const useQueryLimits = () => {
         });
       }
 
-      console.log('✅ Limit check completed successfully:', result);
+      console.log('✅ Limit check completed successfully, returning result');
       return result;
     } catch (error) {
       console.error('💥 Error checking query limit:', error);
+      console.error('💥 Error message:', error.message);
       console.error('💥 Error stack:', error.stack);
       return {
         canProceed: false,
@@ -126,6 +132,7 @@ export const useQueryLimits = () => {
       };
     } finally {
       setIsLoading(false);
+      console.log('🏁 Query limit check process completed');
     }
   };
 

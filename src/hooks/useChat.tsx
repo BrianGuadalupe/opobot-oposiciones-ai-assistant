@@ -37,47 +37,70 @@ export const useChat = () => {
     }
 
     console.log('🔍 Checking query limit...');
-    // Verificar límite antes de procesar
-    const limitCheck = await checkQueryLimit();
-    console.log('✅ Limit check result:', limitCheck);
     
-    if (!limitCheck.canProceed) {
-      console.log('🚫 Cannot proceed with query:', limitCheck.reason);
-      if (limitCheck.reason === 'limit_reached') {
-        toast({
-          title: "🚫 Límite Alcanzado",
-          description: limitCheck.message || "Has alcanzado el límite de consultas mensuales",
-          variant: "destructive",
-        });
-      } else if (limitCheck.reason === 'no_subscription') {
-        toast({
-          title: "Suscripción Requerida",
-          description: limitCheck.message || "Necesitas una suscripción activa",
-          variant: "destructive",
-        });
-      } else if (limitCheck.reason === 'demo_limit_reached') {
-        toast({
-          title: "🚫 Demo Completado",
-          description: limitCheck.message || "Has alcanzado el límite de 3 consultas del Demo",
-          variant: "destructive",
-        });
-      }
-      return;
-    }
-
-    console.log('✅ Can proceed with chat message');
-    setIsLoading(true);
-
-    const userMessage: ChatMessage = {
-      id: Date.now().toString(),
-      role: 'user',
-      content,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-
     try {
+      // Verificar límite antes de procesar
+      const limitCheck = await checkQueryLimit();
+      console.log('✅ Limit check completed');
+      console.log('📊 Limit check raw result:', JSON.stringify(limitCheck, null, 2));
+      console.log('📊 canProceed value:', limitCheck.canProceed);
+      console.log('📊 canProceed type:', typeof limitCheck.canProceed);
+      
+      if (!limitCheck) {
+        console.log('❌ No limit check response received');
+        toast({
+          title: "Error",
+          description: "Error al verificar límite de consultas",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (!limitCheck.canProceed) {
+        console.log('🚫 Cannot proceed with query. Reason:', limitCheck.reason);
+        console.log('🚫 Full limit check response:', limitCheck);
+        
+        if (limitCheck.reason === 'limit_reached') {
+          toast({
+            title: "🚫 Límite Alcanzado",
+            description: limitCheck.message || "Has alcanzado el límite de consultas mensuales",
+            variant: "destructive",
+          });
+        } else if (limitCheck.reason === 'no_subscription') {
+          toast({
+            title: "Suscripción Requerida",
+            description: limitCheck.message || "Necesitas una suscripción activa",
+            variant: "destructive",
+          });
+        } else if (limitCheck.reason === 'demo_limit_reached') {
+          toast({
+            title: "🚫 Demo Completado",
+            description: limitCheck.message || "Has alcanzado el límite de 3 consultas del Demo",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Error",
+            description: limitCheck.message || "No se puede procesar la consulta",
+            variant: "destructive",
+          });
+        }
+        return;
+      }
+
+      console.log('✅ Can proceed with chat message - starting chat flow');
+      setIsLoading(true);
+
+      const userMessage: ChatMessage = {
+        id: Date.now().toString(),
+        role: 'user',
+        content,
+        timestamp: new Date(),
+      };
+
+      console.log('📝 Adding user message to state');
+      setMessages(prev => [...prev, userMessage]);
+
       console.log('📝 Registering question...');
       registerQuestion(content);
 
@@ -86,7 +109,9 @@ export const useChat = () => {
         content: msg.content
       }));
 
-      console.log('🤖 Calling chat-opobot function...');
+      console.log('🤖 About to call chat-opobot function...');
+      console.log('🤖 Conversation history length:', conversationHistory.length);
+      
       const { data, error } = await supabase.functions.invoke('chat-opobot', {
         body: {
           message: content,
@@ -97,11 +122,10 @@ export const useChat = () => {
         },
       });
 
-      console.log('✅ Chat-opobot response received:', { 
-        hasData: !!data, 
-        hasError: !!error,
-        success: data?.success 
-      });
+      console.log('✅ Chat-opobot response received');
+      console.log('📥 Response data exists:', !!data);
+      console.log('📥 Response error exists:', !!error);
+      console.log('📥 Response success:', data?.success);
 
       if (error) {
         console.error('❌ Error from chat-opobot:', error);
