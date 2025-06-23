@@ -25,7 +25,7 @@ export const useSubscription = () => {
 
     // Evitar llamadas muy frecuentes o duplicadas
     const now = Date.now();
-    if (!forceRefresh && (isChecking || (now - lastCheckTime) < 10000)) { // Aumentado a 10 segundos
+    if (!forceRefresh && (isChecking || (now - lastCheckTime) < 5000)) {
       console.log('Subscription check skipped - too frequent or already in progress');
       return;
     }
@@ -45,47 +45,24 @@ export const useSubscription = () => {
       setLastCheckTime(now);
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       
-      console.log('Checking local subscription data first...');
+      console.log('Fetching subscription data from Stripe...');
       
-      // Intentar obtener datos locales primero (más rápido)
-      const { data: localData, error: localError } = await supabase
-        .from('subscribers')
-        .select('subscribed, subscription_tier, subscription_end')
-        .eq('user_id', user.id)
-        .single();
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Subscription check timeout')), 15000);
+      });
+      
+      const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
+      
+      const data = await Promise.race([checkPromise, timeoutPromise]) as any;
 
-      if (!localError && localData && !forceRefresh) {
-        console.log('Using cached local subscription data:', localData);
-        setSubscriptionStatus({
-          subscribed: localData.subscribed,
-          subscription_tier: localData.subscription_tier,
-          subscription_end: localData.subscription_end,
-          loading: false,
-        });
-        return;
-      }
+      console.log('Subscription data received:', data);
 
-      // Solo si es necesario, consultar a Stripe (más lento)
-      if (forceRefresh || localError) {
-        console.log('Fetching fresh subscription data from Stripe...');
-        
-        const timeoutPromise = new Promise((_, reject) => {
-          setTimeout(() => reject(new Error('Subscription check timeout')), 10000); // Reducido a 10s
-        });
-        
-        const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
-        
-        const data = await Promise.race([checkPromise, timeoutPromise]) as any;
-
-        console.log('Fresh subscription data received:', data);
-
-        setSubscriptionStatus({
-          subscribed: data.subscribed,
-          subscription_tier: data.subscription_tier,
-          subscription_end: data.subscription_end,
-          loading: false,
-        });
-      }
+      setSubscriptionStatus({
+        subscribed: data.subscribed,
+        subscription_tier: data.subscription_tier,
+        subscription_end: data.subscription_end,
+        loading: false,
+      });
       
       console.log('✅ Subscription check completed successfully');
     } catch (error) {
@@ -158,17 +135,16 @@ export const useSubscription = () => {
     }
   };
 
-  // Solo verificar suscripción cuando el usuario esté autenticado y no haya verificación reciente
+  // Solo verificar suscripción cuando el usuario esté autenticado
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
     
     if (user && session?.access_token && !isChecking) {
       console.log('Auth complete, scheduling subscription check...');
       
-      // Delay más largo para evitar llamadas inmediatas duplicadas
       timeoutId = setTimeout(() => {
         checkSubscription(false);
-      }, 1000);
+      }, 500);
     }
 
     return () => {
