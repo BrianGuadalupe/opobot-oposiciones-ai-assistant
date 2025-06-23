@@ -39,12 +39,6 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
     return <Navigate to="/auth" replace />;
   }
 
-  // Si se requiere suscripción pero el usuario no está suscrito
-  if (requireSubscription && !subscriptionLoading && !subscribed) {
-    console.log('❌ Subscription required but user not subscribed, redirecting to subscription page');
-    return <Navigate to="/?subscription_required=true" replace />;
-  }
-
   // Si se requiere suscripción y aún se está cargando el estado de suscripción
   if (requireSubscription && subscriptionLoading) {
     return (
@@ -57,6 +51,12 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
         </div>
       </div>
     );
+  }
+
+  // Si se requiere suscripción pero el usuario no está suscrito (después de cargar)
+  if (requireSubscription && !subscriptionLoading && !subscribed) {
+    console.log('❌ Subscription required but user not subscribed, redirecting to home with subscription required');
+    return <Navigate to="/?subscription_required=true" replace />;
   }
 
   console.log('✅ Access granted to protected route');
