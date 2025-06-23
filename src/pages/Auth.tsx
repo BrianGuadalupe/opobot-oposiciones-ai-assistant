@@ -1,215 +1,348 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/hooks/useAuth";
-import { useNavigate, useLocation } from "react-router-dom";
-import ForgotPasswordModal from "@/components/ForgotPasswordModal";
-import ResetPasswordForm from "@/components/ResetPasswordForm";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Eye, EyeOff } from "lucide-react";
+import { useDemoRegistration } from "@/hooks/useDemoRegistration";
 
 const Auth = () => {
-  const location = useLocation();
-  const urlParams = new URLSearchParams(location.search);
-  const queryMode = urlParams.get("mode");
-
-  // Si es modo reset, mostrar el formulario de reset
-  if (queryMode === "reset") {
-    return <ResetPasswordForm />;
-  }
-
-  const [isLogin, setIsLogin] = useState(queryMode !== "register");
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [error, setError] = useState('');
+  const [searchParams] = useSearchParams();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [showEmailConfirmMessage, setShowEmailConfirmMessage] = useState(false);
-  const { signIn, signUp, user } = useAuth();
+  const [mode, setMode] = useState(searchParams.get('mode') || 'login');
+  const isDemo = searchParams.get('demo') === 'true';
+  
+  const { user } = useAuth();
+  const { toast } = useToast();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // Cambia el modo de login/register en función del parámetro cada vez que cambia la URL
-    setIsLogin(queryMode !== "register");
-    
-    // Mostrar mensaje de confirmación si viene del registro
-    if (queryMode === "confirm_email") {
-      setShowEmailConfirmMessage(true);
-      setIsLogin(true);
-    }
-  }, [queryMode]);
+  const { registerDemo } = useDemoRegistration();
 
   useEffect(() => {
     if (user) {
-      navigate('/');
+      if (isDemo) {
+        // Si es demo y ya está logueado, activar demo directamente
+        handleDemoActivation();
+      } else {
+        navigate("/");
+      }
     }
-  }, [user, navigate]);
+  }, [user, navigate, isDemo]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleDemoActivation = async () => {
+    const success = await registerDemo();
+    if (success) {
+      navigate('/chat');
+    }
+  };
+
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          if (error.message.includes('Email not confirmed')) {
-            setError('Por favor, revisa tu email y confirma tu cuenta antes de iniciar sesión.');
-          } else if (error.message.includes('Invalid login credentials')) {
-            setError('Email o contraseña incorrectos. Si acabas de registrarte, confirma tu email primero.');
-          } else {
-            setError(error.message);
+      if (mode === 'signup') {
+        if (password !== confirmPassword) {
+          throw new Error("Las contraseñas no coinciden");
+        }
+
+        if (password.length < 6) {
+          throw new Error("La contraseña debe tener al menos 6 caracteres");
+        }
+
+        const redirectUrl = `${window.location.origin}/`;
+        
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            emailRedirectTo: redirectUrl,
+            data: {
+              full_name: fullName
+            }
           }
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Registro exitoso",
+          description: isDemo ? 
+            "Tu cuenta se ha creado. Activando demo..." : 
+            "Revisa tu correo para confirmar tu cuenta.",
+        });
+
+        if (isDemo) {
+          // Para demo, esperar un momento y luego activar
+          setTimeout(async () => {
+            await handleDemoActivation();
+          }, 2000);
         }
       } else {
-        const { error } = await signUp(email, password, fullName);
-        if (error) {
-          if (error.message.includes('already registered')) {
-            setError('Este email ya está registrado. Intenta iniciar sesión o confirma tu email si ya te registraste.');
-          } else {
-            setError(error.message);
-          }
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (error) throw error;
+
+        toast({
+          title: "Inicio de sesión exitoso",
+          description: "Bienvenido de vuelta",
+        });
+
+        if (isDemo) {
+          await handleDemoActivation();
         } else {
-          // Redirigir a la página de login con mensaje de confirmación
-          navigate('/auth?mode=confirm_email');
+          navigate("/");
         }
       }
-    } catch (err) {
-      setError('Ocurrió un error inesperado');
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
-    <>
-      <div className="min-h-screen bg-gradient-to-br from-opobot-blue to-opobot-green flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-xl p-8 w-full max-w-md">
-          <div className="flex items-center justify-center mb-8">
-            <div className="w-12 h-12 bg-gradient-to-r from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">O</span>
-            </div>
-            <span className="text-2xl font-bold text-gray-900 ml-3">Opobot</span>
-          </div>
-
-          <h2 className="text-2xl font-bold text-center mb-6">
-            {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
-          </h2>
-
-          {showEmailConfirmMessage && (
-            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="font-semibold text-green-800 mb-2">¡Cuenta creada correctamente!</h3>
-              <p className="text-green-700 text-sm">
-                Te hemos enviado un email de confirmación. Por favor, revisa tu bandeja de entrada 
-                y haz clic en el enlace <strong>"Confirmar"</strong> para activar tu cuenta.
-              </p>
-              <p className="text-green-600 text-xs mt-2">
-                Una vez confirmada, podrás iniciar sesión aquí y proceder con tu suscripción.
-              </p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-opobot-blue">
+            {isDemo ? "Demo Gratuito" : "Opobot"}
+          </CardTitle>
+          <CardDescription>
+            {isDemo ? 
+              "Crea tu cuenta para probar 3 consultas gratis" : 
+              "Accede a tu cuenta de Opobot"
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isDemo ? (
+            // Formulario simplificado para demo
+            <form onSubmit={handleAuth} className="space-y-4">
               <div>
-                <Label htmlFor="fullName">Nombre Completo</Label>
+                <Label htmlFor="email">Correo electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="tu@email.com"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fullName">Nombre completo</Label>
                 <Input
                   id="fullName"
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  required={!isLogin}
+                  required
                   placeholder="Tu nombre completo"
-                  autoComplete="name"
                 />
               </div>
-            )}
-
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="tu@email.com"
-                autoComplete="email"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="password">Contraseña</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                minLength={6}
-                autoComplete={isLogin ? "current-password" : "new-password"}
-              />
-            </div>
-
-            {error && (
-              <div className="text-red-600 text-sm text-center">
-                {error}
+              <div className="relative">
+                <Label htmlFor="password">Contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowPassword(!showPassword)}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
               </div>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full bg-opobot-blue hover:bg-opobot-blue-dark"
-              disabled={loading}
-            >
-              {loading ? 'Cargando...' : (isLogin ? 'Iniciar Sesión' : 'Crear Cuenta')}
-            </Button>
-          </form>
-
-          {isLogin && (
-            <div className="mt-4 text-center">
-              <button
-                onClick={() => setShowForgotPassword(true)}
-                className="text-sm text-opobot-blue hover:underline"
-              >
-                ¿Olvidaste tu contraseña?
-              </button>
-            </div>
+              <div className="relative">
+                <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirma tu contraseña"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? "Creando cuenta..." : "🚀 Empezar Demo Gratis"}
+              </Button>
+              <div className="text-center">
+                <Button
+                  type="button"
+                  variant="link"
+                  onClick={() => navigate('/auth')}
+                >
+                  ¿Ya tienes cuenta? Inicia sesión
+                </Button>
+              </div>
+            </form>
+          ) : (
+            // Formulario normal con tabs
+            <Tabs value={mode} onValueChange={setMode}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
+                <TabsTrigger value="signup">Registrarse</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="login">
+                <form onSubmit={handleAuth} className="space-y-4">
+                  <div>
+                    <Label htmlFor="email">Correo electrónico</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="tu@email.com"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        placeholder="Tu contraseña"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Iniciando sesión..." : "Iniciar Sesión"}
+                  </Button>
+                </form>
+              </TabsContent>
+              
+              <TabsContent value="signup">
+                <form onSubmit={handleAuth} className="space-y-4">
+                  <div>
+                    <Label htmlFor="fullName">Nombre completo</Label>
+                    <Input
+                      id="fullName"
+                      type="text"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      placeholder="Tu nombre completo"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="email">Correo electrónico</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      placeholder="tu@email.com"
+                    />
+                  </div>
+                  <div className="relative">
+                    <Label htmlFor="password">Contraseña</Label>
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <Label htmlFor="confirmPassword">Confirmar contraseña</Label>
+                    <div className="relative">
+                      <Input
+                        id="confirmPassword"
+                        type={showConfirmPassword ? "text" : "password"}
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        required
+                        placeholder="Confirma tu contraseña"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Registrando..." : "Crear Cuenta"}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
           )}
-
-          <div className="mt-6 text-center">
-            <button
-              onClick={() => {
-                setIsLogin(!isLogin);
-                setError('');
-                setShowEmailConfirmMessage(false);
-                // Cambia la URL para reflejar el modo al cambiar manualmente
-                const params = new URLSearchParams(location.search);
-                if (isLogin) {
-                  params.set('mode', 'register');
-                } else {
-                  params.delete('mode');
-                }
-                navigate({
-                  pathname: location.pathname,
-                  search: params.toString(),
-                }, { replace: true });
-              }}
-              className="text-opobot-blue hover:underline"
-            >
-              {isLogin ? '¿No tienes cuenta? Regístrate' : '¿Ya tienes cuenta? Inicia sesión'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <ForgotPasswordModal 
-        isOpen={showForgotPassword}
-        onClose={() => setShowForgotPassword(false)}
-      />
-    </>
+        </CardContent>
+      </Card>
+    </div>
   );
 };
 

@@ -1,8 +1,29 @@
 
 import { Button } from "@/components/ui/button";
 import { CheckCircle, Bot } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { useDemoRegistration } from "@/hooks/useDemoRegistration";
+import { useNavigate } from "react-router-dom";
 
 const Hero = () => {
+  const { user } = useAuth();
+  const { registerDemo, isLoading } = useDemoRegistration();
+  const navigate = useNavigate();
+
+  const handleDemoClick = async () => {
+    if (!user) {
+      // Redirigir a registro si no está logueado
+      navigate('/auth?mode=register&demo=true');
+      return;
+    }
+
+    // Si ya está logueado, registrar demo
+    const success = await registerDemo();
+    if (success) {
+      navigate('/chat');
+    }
+  };
+
   return (
     <section className="hero-gradient pt-24 pb-20 lg:pt-36 lg:pb-28 rounded-b-3xl shadow-sm transition-all duration-500">
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -37,8 +58,10 @@ const Hero = () => {
               variant="outline" 
               size="lg"
               className="text-lg px-8 py-4 border-2 rounded-xl border-opobot-blue hover:border-opobot-green transition-shadow hover:shadow"
+              onClick={handleDemoClick}
+              disabled={isLoading}
             >
-              Ver Demo
+              {isLoading ? "Activando..." : "Ver Demo"}
             </Button>
           </div>
 

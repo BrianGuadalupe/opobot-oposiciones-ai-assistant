@@ -48,6 +48,33 @@ export type Database = {
         }
         Relationships: []
       }
+      demo_registrations: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          ip_address: string
+          registration_date: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          ip_address: string
+          registration_date?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          ip_address?: string
+          registration_date?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       frequent_questions: {
         Row: {
           context: string | null
@@ -200,6 +227,7 @@ export type Database = {
           email: string
           id: string
           is_active: boolean
+          is_demo_user: boolean
           months_with_active_subscription: number
           queries_per_month: number
           queries_remaining_this_month: number
@@ -217,6 +245,7 @@ export type Database = {
           email: string
           id?: string
           is_active?: boolean
+          is_demo_user?: boolean
           months_with_active_subscription?: number
           queries_per_month?: number
           queries_remaining_this_month?: number
@@ -234,6 +263,7 @@ export type Database = {
           email?: string
           id?: string
           is_active?: boolean
+          is_demo_user?: boolean
           months_with_active_subscription?: number
           queries_per_month?: number
           queries_remaining_this_month?: number
@@ -251,6 +281,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_register_demo: {
+        Args: { check_ip: string }
+        Returns: boolean
+      }
       get_plan_limit: {
         Args: { plan_tier: string }
         Returns: number

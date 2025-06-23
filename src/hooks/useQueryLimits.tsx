@@ -51,7 +51,24 @@ export const useQueryLimits = () => {
         setUsageData(result.usageData);
       }
 
-      // Mostrar advertencias
+      // Mostrar advertencias para demo
+      if (result.reason === 'demo_warning_90') {
+        toast({
+          title: "⚠️ Demo - Límite Cercano",
+          description: result.message,
+          variant: "default",
+        });
+      }
+
+      if (result.reason === 'demo_limit_reached') {
+        toast({
+          title: "🚫 Demo Completado",
+          description: result.message,
+          variant: "destructive",
+        });
+      }
+
+      // Mostrar advertencias para plan básico
       if (result.reason === 'warning_90') {
         toast({
           title: "⚠️ Límite de Consultas",
