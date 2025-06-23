@@ -9,6 +9,45 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      academy_contacts: {
+        Row: {
+          academy_name: string
+          city: string
+          contacted: boolean
+          created_at: string
+          email: string
+          id: string
+          notes: string | null
+          phone: string
+          student_count: number
+          updated_at: string
+        }
+        Insert: {
+          academy_name: string
+          city: string
+          contacted?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          notes?: string | null
+          phone: string
+          student_count: number
+          updated_at?: string
+        }
+        Update: {
+          academy_name?: string
+          city?: string
+          contacted?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          notes?: string | null
+          phone?: string
+          student_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       frequent_questions: {
         Row: {
           context: string | null
