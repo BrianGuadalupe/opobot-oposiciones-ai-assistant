@@ -1,7 +1,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { LogOut, User, MessageCircle } from "lucide-react";
+import { LogOut, User, MessageCircle, Bot } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 
 const Header = () => {
@@ -23,13 +23,13 @@ const Header = () => {
             {user && (
               <Link 
                 to="/chat" 
-                className={`flex items-center space-x-2 transition-colors ${
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all ${
                   location.pathname === '/chat' 
-                    ? 'text-opobot-blue' 
-                    : 'text-gray-600 hover:text-opobot-blue'
+                    ? 'bg-opobot-blue text-white shadow-md' 
+                    : 'bg-gradient-to-r from-opobot-blue to-opobot-green text-white hover:shadow-lg hover:scale-105'
                 }`}
               >
-                <MessageCircle className="w-4 h-4" />
+                <Bot className="w-5 h-5" />
                 <span>Chat IA</span>
               </Link>
             )}
@@ -47,7 +47,19 @@ const Header = () => {
           <div className="flex items-center space-x-4">
             {user ? (
               <div className="flex items-center space-x-3">
-                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                {/* Chat IA button for mobile - visible only on small screens */}
+                <Link 
+                  to="/chat" 
+                  className={`md:hidden flex items-center justify-center w-12 h-12 rounded-full transition-all ${
+                    location.pathname === '/chat' 
+                      ? 'bg-opobot-blue text-white shadow-md' 
+                      : 'bg-gradient-to-r from-opobot-blue to-opobot-green text-white hover:shadow-lg hover:scale-105'
+                  }`}
+                >
+                  <Bot className="w-6 h-6" />
+                </Link>
+                
+                <div className="hidden sm:flex items-center space-x-2 text-sm text-gray-600">
                   <User className="w-4 h-4" />
                   <span>{user.email}</span>
                 </div>
@@ -58,7 +70,7 @@ const Header = () => {
                   className="flex items-center space-x-2"
                 >
                   <LogOut className="w-4 h-4" />
-                  <span>Salir</span>
+                  <span className="hidden sm:inline">Salir</span>
                 </Button>
               </div>
             ) : (
