@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
 import { checkSubscriptionStatus, createStripeCheckout, openStripeCustomerPortal } from '@/utils/subscriptionApi';
@@ -15,7 +14,11 @@ export const useSubscription = () => {
     loading: true,
   });
   const [isChecking, setIsChecking] = useState(false);
-  const [lastCheckTime, setLastCheckTime] = useState<number>(0);
+  
+  // Use refs to track the last successful check and prevent unnecessary re-checks
+  const lastCheckTimeRef = useRef<number>(0);
+  const lastUserIdRef = useRef<string | null>(null);
+  const hasValidCheckRef = useRef<boolean>(false);
 
   const checkSubscription = useCallback(async (forceRefresh: boolean = false) => {
     console.log('=== SUBSCRIPTION CHECK START ===');
@@ -23,39 +26,55 @@ export const useSubscription = () => {
     console.log('Is checking:', isChecking);
     console.log('User:', !!user);
     console.log('Session:', !!session);
-    console.log('Environment:', window.location.origin);
+    console.log('Has valid check:', hasValidCheckRef.current);
 
-    // Evitar llamadas muy frecuentes o duplicadas
-    const now = Date.now();
-    if (!forceRefresh && (isChecking || (now - lastCheckTime) < 5000)) {
-      console.log('Subscription check skipped - too frequent or already in progress');
+    // If we already have a valid check for this user and no force refresh, skip
+    if (!forceRefresh && hasValidCheckRef.current && lastUserIdRef.current === user?.id && !isChecking) {
+      console.log('Subscription check skipped - already have valid result for this user');
       return;
     }
 
-    // Esperar a que la autenticación esté completa
+    // Prevent multiple simultaneous checks
+    if (isChecking) {
+      console.log('Subscription check already in progress, skipping');
+      return;
+    }
+
+    // Rate limiting - avoid checks more frequent than 3 seconds unless forced
+    const now = Date.now();
+    if (!forceRefresh && (now - lastCheckTimeRef.current) < 3000) {
+      console.log('Subscription check skipped - rate limited');
+      return;
+    }
+
+    // Wait for complete auth session
     if (!user || !session?.access_token) {
       console.log('Subscription check: Waiting for complete auth session');
       console.log('User exists:', !!user);
       console.log('Session exists:', !!session);
       console.log('Access token exists:', !!session?.access_token);
-      console.log('Access token length:', session?.access_token?.length || 0);
       
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
       });
+      hasValidCheckRef.current = false;
       return;
     }
 
     try {
       setIsChecking(true);
-      setLastCheckTime(now);
-      setSubscriptionStatus(prev => ({ ...prev, loading: true }));
+      lastCheckTimeRef.current = now;
+      lastUserIdRef.current = user.id;
+      
+      // Only set loading to true if we don't have a valid previous result
+      if (!hasValidCheckRef.current) {
+        setSubscriptionStatus(prev => ({ ...prev, loading: true }));
+      }
       
       console.log('Fetching subscription data from Stripe...');
-      console.log('Using access token:', session.access_token.substring(0, 50) + '...');
       
-      // Reducir timeout a 8 segundos para evitar timeouts largos
+      // Reduce timeout to 8 seconds
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => reject(new Error('Subscription check timeout')), 8000);
       });
@@ -66,19 +85,22 @@ export const useSubscription = () => {
 
       console.log('Subscription data received:', data);
 
-      setSubscriptionStatus({
+      const newStatus = {
         subscribed: data.subscribed,
         subscription_tier: data.subscription_tier,
         subscription_end: data.subscription_end,
         loading: false,
-      });
+      };
+
+      setSubscriptionStatus(newStatus);
+      hasValidCheckRef.current = true;
       
       console.log('✅ Subscription check completed successfully');
+      console.log('✅ Final status:', newStatus);
     } catch (error) {
       console.error('❌ Error checking subscription:', error);
-      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       
-      // En caso de timeout o error, verificar si es usuario demo como fallback
+      // Handle timeout with demo user fallback
       if (error instanceof Error && error.message.includes('timeout')) {
         console.log('Timeout detected, checking demo user status as fallback...');
         try {
@@ -90,11 +112,13 @@ export const useSubscription = () => {
 
           if (!usageError && usageData?.is_demo_user) {
             console.log('Demo user detected during timeout, setting demo status');
-            setSubscriptionStatus({
+            const demoStatus = {
               subscribed: usageData.queries_remaining_this_month > 0,
               subscription_tier: 'Demo',
               loading: false,
-            });
+            };
+            setSubscriptionStatus(demoStatus);
+            hasValidCheckRef.current = true;
             return;
           }
         } catch (demoError) {
@@ -108,10 +132,11 @@ export const useSubscription = () => {
         subscribed: false,
         loading: false,
       });
+      hasValidCheckRef.current = false;
     } finally {
       setIsChecking(false);
     }
-  }, [user, session?.access_token, isChecking, lastCheckTime]);
+  }, [user?.id, session?.access_token, isChecking]);
 
   // Función principal de redirección a Stripe Checkout
   const redirectToStripeCheckout = async (planName: string) => {
@@ -183,22 +208,36 @@ export const useSubscription = () => {
     }
   };
 
-  // Solo verificar suscripción cuando el usuario esté autenticado
+  // Optimized effect - only run subscription check when truly necessary
   useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    if (user && session?.access_token && !isChecking) {
-      console.log('Auth complete, scheduling subscription check...');
-      
-      timeoutId = setTimeout(() => {
-        checkSubscription(false);
-      }, 500);
+    // Reset cache when user changes
+    if (user?.id !== lastUserIdRef.current) {
+      console.log('User changed, resetting subscription cache');
+      hasValidCheckRef.current = false;
+      lastCheckTimeRef.current = 0;
     }
 
-    return () => {
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [user?.id, session?.access_token]);
+    // Only check if we have a complete auth session and don't have a valid result
+    if (user && session?.access_token && !hasValidCheckRef.current && !isChecking) {
+      console.log('Auth complete, scheduling subscription check...');
+      
+      const timeoutId = setTimeout(() => {
+        checkSubscription(false);
+      }, 100); // Reduced timeout for faster response
+
+      return () => clearTimeout(timeoutId);
+    }
+  }, [user?.id, session?.access_token, checkSubscription, isChecking]);
+
+  // Clear cache when auth state is lost
+  useEffect(() => {
+    if (!user || !session) {
+      console.log('Auth lost, clearing subscription cache');
+      hasValidCheckRef.current = false;
+      lastUserIdRef.current = null;
+      lastCheckTimeRef.current = 0;
+    }
+  }, [user, session]);
 
   return {
     ...subscriptionStatus,
