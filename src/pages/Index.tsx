@@ -1,3 +1,4 @@
+
 import { useAuth } from "@/hooks/useAuth";
 import { useQueryLimits } from "@/hooks/useQueryLimits";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -17,7 +18,7 @@ import SubscriptionDebugPanel from "@/components/SubscriptionDebugPanel";
 const Index = () => {
   const { user } = useAuth();
   const { subscribed, loading: subscriptionLoading } = useSubscription();
-  const { queriesRemaining, loading: usageLoading } = useQueryLimits();
+  const { usageData, isLoading: usageLoading } = useQueryLimits();
   const [searchParams] = useSearchParams();
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
@@ -31,7 +32,7 @@ const Index = () => {
 
   // Display a toast message if the user has exceeded their query limits
   useEffect(() => {
-    if (!usageLoading && queriesRemaining !== null && queriesRemaining <= 0) {
+    if (!usageLoading && usageData && usageData.queriesRemaining <= 0) {
       toast({
         title: "Límite de Consultas Alcanzado",
         description: "Has alcanzado el límite de consultas gratuitas. Suscríbete para obtener consultas ilimitadas.",
@@ -43,7 +44,7 @@ const Index = () => {
         ),
       });
     }
-  }, [queriesRemaining, usageLoading, toast]);
+  }, [usageData, usageLoading, toast]);
 
   // Check for subscription_required parameter
   useEffect(() => {
