@@ -35,34 +35,35 @@ serve(async (req) => {
     const user = userData.user;
 
     if (action === "check_demo_availability") {
-      // Verificar si el email ya tiene una demo registrada
-      const { data: emailDemo } = await supabaseClient
-        .from("demo_registrations")
-        .select("id")
-        .eq("email", user.email)
-        .single();
-
-      if (emailDemo) {
-        return new Response(JSON.stringify({ 
-          canRegister: false, 
-          reason: 'email_already_used' 
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Verificar si IP puede registrar demo hoy
+      // Verificar usando la nueva función que acepta email
       const { data: canRegister } = await supabaseClient.rpc('can_register_demo', { 
-        check_ip: userIp 
+        check_ip: userIp,
+        check_email: user.email
       });
       
       if (!canRegister) {
-        return new Response(JSON.stringify({ 
-          canRegister: false, 
-          reason: 'ip_limit_reached' 
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        // Verificar el motivo específico
+        const { data: emailDemo } = await supabaseClient
+          .from("demo_registrations")
+          .select("id")
+          .eq("email", user.email)
+          .single();
+
+        if (emailDemo) {
+          return new Response(JSON.stringify({ 
+            canRegister: false, 
+            reason: 'email_already_used' 
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } else {
+          return new Response(JSON.stringify({ 
+            canRegister: false, 
+            reason: 'ip_limit_reached' 
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       return new Response(JSON.stringify({ canRegister: true }), {
@@ -71,23 +72,25 @@ serve(async (req) => {
     }
 
     if (action === "register_demo") {
-      // Verificar nuevamente antes de registrar
-      const { data: emailDemo } = await supabaseClient
-        .from("demo_registrations")
-        .select("id")
-        .eq("email", user.email)
-        .single();
-
-      if (emailDemo) {
-        throw new Error("Email already has demo registered");
-      }
-
+      // Verificar nuevamente antes de registrar usando la nueva función
       const { data: canRegister } = await supabaseClient.rpc('can_register_demo', { 
-        check_ip: userIp 
+        check_ip: userIp,
+        check_email: user.email
       });
       
       if (!canRegister) {
-        throw new Error("IP limit reached for today");
+        // Verificar el motivo específico
+        const { data: emailDemo } = await supabaseClient
+          .from("demo_registrations")
+          .select("id")
+          .eq("email", user.email)
+          .single();
+
+        if (emailDemo) {
+          throw new Error("Email already has demo registered");
+        } else {
+          throw new Error("IP limit reached for today");
+        }
       }
 
       // Registrar usuario demo

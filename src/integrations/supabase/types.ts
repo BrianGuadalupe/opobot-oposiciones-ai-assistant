@@ -282,7 +282,7 @@ export type Database = {
     }
     Functions: {
       can_register_demo: {
-        Args: { check_ip: string }
+        Args: { check_ip: string } | { check_ip: string; check_email?: string }
         Returns: boolean
       }
       get_plan_limit: {
