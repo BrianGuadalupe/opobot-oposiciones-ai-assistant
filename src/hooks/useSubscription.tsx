@@ -22,6 +22,7 @@ export const useSubscription = () => {
     console.log('Is checking:', isChecking);
     console.log('User:', !!user);
     console.log('Session:', !!session);
+    console.log('Environment:', window.location.origin);
 
     // Evitar llamadas muy frecuentes o duplicadas
     const now = Date.now();
@@ -33,6 +34,11 @@ export const useSubscription = () => {
     // Esperar a que la autenticación esté completa
     if (!user || !session?.access_token) {
       console.log('Subscription check: Waiting for complete auth session');
+      console.log('User exists:', !!user);
+      console.log('Session exists:', !!session);
+      console.log('Access token exists:', !!session?.access_token);
+      console.log('Access token length:', session?.access_token?.length || 0);
+      
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
@@ -46,6 +52,7 @@ export const useSubscription = () => {
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       
       console.log('Fetching subscription data from Stripe...');
+      console.log('Using access token:', session.access_token.substring(0, 50) + '...');
       
       // Reducir timeout a 8 segundos para evitar timeouts largos
       const timeoutPromise = new Promise((_, reject) => {
@@ -68,6 +75,7 @@ export const useSubscription = () => {
       console.log('✅ Subscription check completed successfully');
     } catch (error) {
       console.error('❌ Error checking subscription:', error);
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack');
       
       // En caso de timeout o error, verificar si es usuario demo como fallback
       if (error instanceof Error && error.message.includes('timeout')) {

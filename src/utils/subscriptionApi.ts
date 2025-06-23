@@ -11,9 +11,73 @@ export const checkSubscriptionStatus = async (
   console.log('=== CHECK SUBSCRIPTION STATUS START ===');
   console.log('User ID:', userId);
   console.log('Access token length:', accessToken?.length || 0);
+  console.log('Supabase URL:', 'https://dozaqjmdoblwqnuprxnq.supabase.co');
   
   try {
-    // Usar timeout con Promise.race
+    // 1. Verificar token antes de la llamada
+    if (!accessToken || accessToken.length < 100) {
+      console.error('❌ Invalid access token:', accessToken?.length);
+      throw new Error('Invalid access token');
+    }
+
+    // 2. Test de conectividad directo a Supabase
+    console.log('🔄 Step 1: Testing direct Supabase connectivity...');
+    try {
+      const directTest = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/rest/v1/', {
+        headers: {
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvemFxam1kb2Jsd3FudXByeG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4NTU5ODAsImV4cCI6MjA2NTQzMTk4MH0.dOvT-HqqkUBXZTq3aRoiQZT5Je8Ejn-Bzy6ZqeTR_gk'
+        }
+      });
+      console.log('🌐 Direct Supabase test status:', directTest.status);
+    } catch (connError) {
+      console.error('🚨 Direct connectivity failed:', connError);
+    }
+
+    // 3. Test directo a la Edge Function con fetch manual
+    console.log('🔄 Step 2: Testing direct function call...');
+    const functionUrl = 'https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/check-subscription';
+    console.log('Function URL:', functionUrl);
+    
+    try {
+      const directFunctionTest = await fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvemFxam1kb2Jsd3FudXByeG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4NTU5ODAsImV4cCI6MjA2NTQzMTk4MH0.dOvT-HqqkUBXZTq3aRoiQZT5Je8Ejn-Bzy6ZqeTR_gk'
+        }
+      });
+      
+      console.log('🌐 Direct function test status:', directFunctionTest.status);
+      console.log('🌐 Direct function test headers:', Object.fromEntries(directFunctionTest.headers.entries()));
+      
+      if (directFunctionTest.ok) {
+        const directData = await directFunctionTest.text();
+        console.log('✅ Direct function call worked! Data:', directData.substring(0, 200));
+        
+        try {
+          const parsedData = JSON.parse(directData);
+          console.log('✅ Direct call result:', parsedData);
+          return parsedData;
+        } catch (parseError) {
+          console.log('Direct response not JSON, continuing with Supabase client...');
+        }
+      }
+    } catch (directError) {
+      console.error('🚨 Direct function call failed:', directError);
+    }
+
+    // 4. Usar el cliente de Supabase con timeout personalizado
+    console.log('🔄 Step 3: Using Supabase client method...');
+    console.log('Calling supabase.functions.invoke with params:', {
+      functionName: 'check-subscription',
+      headers: {
+        Authorization: `Bearer ${accessToken.substring(0, 20)}...`,
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    // Crear Promise con timeout manual
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error('Subscription check timeout')), 7000);
     });
@@ -25,15 +89,19 @@ export const checkSubscriptionStatus = async (
       },
     });
 
+    const startTime = Date.now();
     const { data, error } = await Promise.race([
       subscriptionPromise,
       timeoutPromise
     ]) as any;
+    const endTime = Date.now();
 
-    console.log('Check subscription response:', { data, error });
+    console.log('Supabase client call completed in:', endTime - startTime, 'ms');
+    console.log('Supabase client response:', { data, error });
 
     if (error) {
-      console.error('❌ Subscription check error:', error);
+      console.error('❌ Supabase client error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
       throw new Error('Failed to check subscription status');
     }
 
