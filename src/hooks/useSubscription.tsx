@@ -47,8 +47,9 @@ export const useSubscription = () => {
       
       console.log('Fetching subscription data from Stripe...');
       
+      // Reducir timeout a 8 segundos para evitar timeouts largos
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Subscription check timeout')), 15000);
+        setTimeout(() => reject(new Error('Subscription check timeout')), 8000);
       });
       
       const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
@@ -67,6 +68,31 @@ export const useSubscription = () => {
       console.log('✅ Subscription check completed successfully');
     } catch (error) {
       console.error('❌ Error checking subscription:', error);
+      
+      // En caso de timeout o error, verificar si es usuario demo como fallback
+      if (error instanceof Error && error.message.includes('timeout')) {
+        console.log('Timeout detected, checking demo user status as fallback...');
+        try {
+          const { data: usageData, error: usageError } = await supabase
+            .from('user_usage')
+            .select('is_demo_user, subscription_tier, queries_remaining_this_month')
+            .eq('user_id', user.id)
+            .single();
+
+          if (!usageError && usageData?.is_demo_user) {
+            console.log('Demo user detected during timeout, setting demo status');
+            setSubscriptionStatus({
+              subscribed: usageData.queries_remaining_this_month > 0,
+              subscription_tier: 'Demo',
+              loading: false,
+            });
+            return;
+          }
+        } catch (demoError) {
+          console.log('Demo fallback check failed:', demoError);
+        }
+      }
+      
       handleSecureError(error, 'Error al verificar el estado de la suscripción');
       
       setSubscriptionStatus({

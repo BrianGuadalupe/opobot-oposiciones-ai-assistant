@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { handleSecureError } from '@/utils/securityUtils';
 import { toast } from '@/hooks/use-toast';
@@ -13,12 +12,19 @@ export const checkSubscriptionStatus = async (
   console.log('Access token length:', accessToken?.length || 0);
   
   try {
+    // Reducir timeout para evitar timeouts largos
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 7000); // 7 segundos
+
     const { data, error } = await supabase.functions.invoke('check-subscription', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     console.log('Check subscription response:', { data, error });
 
@@ -36,6 +42,12 @@ export const checkSubscriptionStatus = async (
     return data;
   } catch (error) {
     console.error('❌ Check subscription failed:', error);
+    
+    // Si es un error de abort, lo convertimos en timeout
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('Subscription check timeout');
+    }
+    
     throw error;
   }
 };

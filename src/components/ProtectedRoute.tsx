@@ -37,11 +37,19 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
 
       try {
         console.log('Checking subscription status with Stripe...');
+        
+        // Usar timeout más corto para la verificación en ProtectedRoute
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 segundos
+        
         const { data: refreshData, error: refreshError } = await supabase.functions.invoke('check-subscription', {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
+          signal: controller.signal,
         });
+        
+        clearTimeout(timeoutId);
         
         if (refreshError) {
           console.error('Error checking subscription:', refreshError);
@@ -91,6 +99,28 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
         }
       } catch (error) {
         console.error('Unexpected error checking access:', error);
+        
+        // Si es timeout, verificar si es usuario demo
+        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+          console.log('Timeout in access check, trying demo user fallback...');
+          try {
+            const { data: usageData, error: usageError } = await supabase
+              .from('user_usage')
+              .select('is_demo_user, subscription_tier, queries_remaining_this_month')
+              .eq('user_id', user.id)
+              .single();
+
+            if (!usageError && usageData?.is_demo_user && usageData.queries_remaining_this_month > 0) {
+              console.log('Demo user has queries remaining, granting access after timeout');
+              setHasAccess(true);
+              setIsLoading(false);
+              return;
+            }
+          } catch (demoError) {
+            console.log('Demo fallback failed:', demoError);
+          }
+        }
+        
         navigate('/?subscription_required=true');
         return;
       } finally {
