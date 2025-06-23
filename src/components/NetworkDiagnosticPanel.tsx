@@ -26,9 +26,9 @@ const NetworkDiagnosticPanel = () => {
     console.log('Running connectivity test...');
     results.connectivity = await networkDiagnostics.testSupabaseConnection();
     
-    // Test 2: Direct function call
+    // Test 2: Direct function call with default plan
     console.log('Running direct function test...');
-    results.directCall = await networkDiagnostics.testDirectFunctionCall(session.access_token);
+    results.directCall = await networkDiagnostics.testDirectFunctionCall(session.access_token, 'Profesional');
     
     setDiagnostics(results);
     setTesting(false);

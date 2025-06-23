@@ -60,9 +60,9 @@ export const createStripeCheckout = async (
       throw new Error('No se puede conectar con Supabase - problema de red');
     }
     
-    // Paso 2: Test directo de la función
-    console.log('🔄 Step 2: Testing direct function call...');
-    const directTest = await networkDiagnostics.testDirectFunctionCall(accessToken);
+    // Paso 2: Test directo de la función con el plan correcto
+    console.log('🔄 Step 2: Testing direct function call with plan:', planName);
+    const directTest = await networkDiagnostics.testDirectFunctionCall(accessToken, planName);
     console.log('Direct test result:', directTest);
     
     if (directTest.success && directTest.body) {

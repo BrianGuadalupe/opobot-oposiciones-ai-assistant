@@ -22,7 +22,7 @@ export const networkDiagnostics = {
   },
 
   // Test directo de la función edge
-  async testDirectFunctionCall(accessToken: string) {
+  async testDirectFunctionCall(accessToken: string, planName: string = 'Profesional') {
     console.log('🔍 TESTING DIRECT FUNCTION CALL...');
     const functionUrl = 'https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/create-checkout';
     
@@ -35,7 +35,7 @@ export const networkDiagnostics = {
           'Content-Type': 'application/json',
           'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvemFxam1kb2Jsd3FudXByeG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk4NTU5ODAsImV4cCI6MjA2NTQzMTk4MH0.dOvT-HqqkUBXZTq3aRoiQZT5Je8Ejn-Bzy6ZqeTR_gk'
         },
-        body: JSON.stringify({ planName: 'Profesional' })
+        body: JSON.stringify({ planName })
       });
 
       console.log('Direct fetch response status:', response.status);
