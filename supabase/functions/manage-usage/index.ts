@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -36,17 +35,61 @@ serve(async (req) => {
     const user = userData.user;
 
     if (action === "check_demo_availability") {
-      // Verificar si IP puede registrar demo
+      // Verificar si el email ya tiene una demo registrada
+      const { data: emailDemo } = await supabaseClient
+        .from("demo_registrations")
+        .select("id")
+        .eq("email", user.email)
+        .single();
+
+      if (emailDemo) {
+        return new Response(JSON.stringify({ 
+          canRegister: false, 
+          reason: 'email_already_used' 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verificar si IP puede registrar demo hoy
       const { data: canRegister } = await supabaseClient.rpc('can_register_demo', { 
         check_ip: userIp 
       });
       
-      return new Response(JSON.stringify({ canRegister }), {
+      if (!canRegister) {
+        return new Response(JSON.stringify({ 
+          canRegister: false, 
+          reason: 'ip_limit_reached' 
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ canRegister: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     if (action === "register_demo") {
+      // Verificar nuevamente antes de registrar
+      const { data: emailDemo } = await supabaseClient
+        .from("demo_registrations")
+        .select("id")
+        .eq("email", user.email)
+        .single();
+
+      if (emailDemo) {
+        throw new Error("Email already has demo registered");
+      }
+
+      const { data: canRegister } = await supabaseClient.rpc('can_register_demo', { 
+        check_ip: userIp 
+      });
+      
+      if (!canRegister) {
+        throw new Error("IP limit reached for today");
+      }
+
       // Registrar usuario demo
       await supabaseClient
         .from("demo_registrations")

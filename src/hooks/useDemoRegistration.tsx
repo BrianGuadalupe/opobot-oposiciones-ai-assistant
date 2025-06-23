@@ -53,9 +53,17 @@ export const useDemoRegistration = () => {
       const availability = await checkDemoAvailability();
       
       if (!availability.canRegister) {
+        let message = "No se pudo activar el demo. Inténtalo de nuevo.";
+        
+        if (availability.reason === 'email_already_used') {
+          message = "Ya has realizado la demo gratuita. ¡Suscríbete para acceso completo a Opobot!";
+        } else if (availability.reason === 'ip_limit_reached') {
+          message = "Ya has realizado la demo gratuita. ¡Suscríbete para acceso completo a Opobot!";
+        }
+
         toast({
           title: "Demo no disponible",
-          description: "Ya has realizado la demo gratuita. ¡Suscríbete para acceso completo a Opobot!",
+          description: message,
           variant: "destructive",
           action: (
             <button 
