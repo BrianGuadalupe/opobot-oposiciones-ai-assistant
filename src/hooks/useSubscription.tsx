@@ -13,10 +13,16 @@ export const useSubscription = () => {
     subscribed: false,
     loading: true,
   });
-  const [hasCheckedSubscription, setHasCheckedSubscription] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
 
   const checkSubscription = useCallback(async () => {
-    // Wait for auth to be fully loaded
+    // Evitar llamadas simultáneas
+    if (isChecking) {
+      console.log('Subscription check already in progress, skipping...');
+      return;
+    }
+
+    // Esperar a que la autenticación esté completa
     if (!user || !session?.access_token) {
       console.log('Subscription check: Waiting for complete auth session');
       setSubscriptionStatus({
@@ -26,15 +32,11 @@ export const useSubscription = () => {
       return;
     }
 
-    // Prevent multiple simultaneous calls
-    if (subscriptionStatus.loading) {
-      console.log('Subscription check already in progress, skipping...');
-      return;
-    }
-
     try {
+      setIsChecking(true);
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       
+      console.log('=== CHECKING SUBSCRIPTION STATUS ===');
       const data = await checkSubscriptionStatus(user.id, session.access_token);
 
       setSubscriptionStatus({
@@ -44,7 +46,7 @@ export const useSubscription = () => {
         loading: false,
       });
       
-      setHasCheckedSubscription(true);
+      console.log('✅ Subscription check completed:', data);
     } catch (error) {
       console.error('Error checking subscription:', error);
       handleSecureError(error, 'Error al verificar el estado de la suscripción');
@@ -52,9 +54,10 @@ export const useSubscription = () => {
         subscribed: false,
         loading: false,
       });
-      setHasCheckedSubscription(true);
+    } finally {
+      setIsChecking(false);
     }
-  }, [user, session?.access_token, subscriptionStatus.loading]);
+  }, [user, session?.access_token, isChecking]);
 
   // Función principal de redirección a Stripe Checkout
   const redirectToStripeCheckout = async (planName: string) => {
@@ -80,9 +83,6 @@ export const useSubscription = () => {
       }
 
       console.log('🌐 Redirecting to Stripe Checkout URL:', data.url);
-      
-      // Opción 1: Redirección directa (recomendada)
-      console.log('Using window.location.href for redirect...');
       window.location.href = data.url;
       
     } catch (error) {
@@ -91,56 +91,7 @@ export const useSubscription = () => {
     }
   };
 
-  // Función alternativa usando sessionId (si prefieres esta opción)
-  const redirectToStripeCheckoutWithSessionId = async (planName: string) => {
-    console.log('=== STRIPE CHECKOUT WITH SESSION ID START ===');
-    console.log('Plan:', planName);
-    
-    if (!user || !session?.access_token) {
-      console.log('❌ No user session for checkout');
-      handleSecureError(new Error('No authenticated session'), 'Debes iniciar sesión para suscribirte');
-      return;
-    }
-
-    try {
-      console.log('🔄 Creating checkout session...');
-      const data = await createStripeCheckout(planName, session.access_token);
-      
-      console.log('✅ Checkout session created:', data);
-      
-      if (!data?.sessionId) {
-        throw new Error('No se recibió el sessionId de Stripe');
-      }
-
-      console.log('🌐 Redirecting with sessionId:', data.sessionId);
-      
-      // Opción 2: Usando Stripe.js (requiere cargar Stripe en el frontend)
-      // Nota: Necesitarías instalar @stripe/stripe-js para usar esto
-      /*
-      const stripe = await loadStripe('tu_publishable_key_aquí');
-      if (stripe) {
-        const { error } = await stripe.redirectToCheckout({
-          sessionId: data.sessionId
-        });
-        if (error) {
-          console.error('Stripe redirect error:', error);
-          handleSecureError(error, 'Error al redirigir a Stripe');
-        }
-      }
-      */
-      
-      // Alternativa sin Stripe.js: construir URL manualmente
-      const checkoutUrl = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
-      console.log('Constructed checkout URL:', checkoutUrl);
-      window.location.href = checkoutUrl;
-      
-    } catch (error) {
-      console.error('❌ Error in checkout redirect:', error);
-      handleSecureError(error, 'Error al crear la sesión de pago');
-    }
-  };
-
-  // Customer portal sigue igual ya que no interfiere con webhooks
+  // Customer portal
   const openCustomerPortal = async () => {
     if (!user || !session?.access_token) {
       console.log('No user session for customer portal');
@@ -165,19 +116,18 @@ export const useSubscription = () => {
     }
   };
 
-  // Only run checkSubscription once when we have a complete session
+  // Solo verificar suscripción una vez cuando el usuario esté autenticado
   useEffect(() => {
-    if (user && session?.access_token && !hasCheckedSubscription) {
+    if (user && session?.access_token && !isChecking) {
       console.log('Auth complete, checking subscription...');
       checkSubscription();
     }
-  }, [user, session?.access_token, hasCheckedSubscription, checkSubscription]);
+  }, [user?.id, session?.access_token]); // Dependencias más específicas
 
   return {
     ...subscriptionStatus,
     checkSubscription,
     redirectToStripeCheckout,
-    redirectToStripeCheckoutWithSessionId, // Función alternativa
     openCustomerPortal,
   };
 };
