@@ -138,18 +138,18 @@ serve(async (req) => {
       });
     }
 
-    // 4. MAPEAR PLANES A PRICE IDs - TUS PRICE IDs REALES
-    const PLAN_MAPPING = {
-      "Básico": "price_1RakDbG0tRQIugBejNs3yiVA",
-      "Profesional": "price_1RakGGG0tRQIugBefzFK7piu", 
-      "Academias": "price_1RakGkG0tRQIugBeECOoQI3p"
+    // 4. MAPEAR PLANES A PRECIOS (usando price_data en lugar de price_id)
+    const PLAN_PRICING = {
+      "Básico": { amount: 995, name: "Plan Básico" },        // €9.95
+      "Profesional": { amount: 1995, name: "Plan Profesional" }, // €19.95  
+      "Academias": { amount: 4995, name: "Plan Academias" }   // €49.95
     };
 
-    const priceId = PLAN_MAPPING[planName as keyof typeof PLAN_MAPPING];
-    logStep("Plan mapping", { planName, priceId, availablePlans: Object.keys(PLAN_MAPPING) });
+    const planConfig = PLAN_PRICING[planName as keyof typeof PLAN_PRICING];
+    logStep("Plan mapping", { planName, planConfig, availablePlans: Object.keys(PLAN_PRICING) });
     
-    if (!priceId) {
-      logStep("ERROR: Invalid plan name", { planName, availablePlans: Object.keys(PLAN_MAPPING) });
+    if (!planConfig) {
+      logStep("ERROR: Invalid plan name", { planName, availablePlans: Object.keys(PLAN_PRICING) });
       return new Response(JSON.stringify({ error: "Invalid plan name" }), { 
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" }
@@ -183,11 +183,11 @@ serve(async (req) => {
       logStep("New customer created", { customerId });
     }
 
-    // 7. CREAR CHECKOUT SESSION
+    // 7. CREAR CHECKOUT SESSION CON FORMATO CORRECTO
     const origin = req.headers.get("origin") || req.headers.get("referer") || "https://dozaqjmdoblwqnuprxnq.supabase.co";
     logStep("Creating checkout session", { 
       customerId, 
-      priceId, 
+      planConfig, 
       origin,
       planName 
     });
@@ -196,7 +196,17 @@ serve(async (req) => {
       const session = await stripe.checkout.sessions.create({
         customer: customerId,
         line_items: [{
-          price: priceId,
+          price_data: {
+            currency: 'eur',
+            product_data: {
+              name: planConfig.name,
+              description: `Suscripción mensual al ${planConfig.name}`,
+            },
+            unit_amount: planConfig.amount,
+            recurring: {
+              interval: 'month',
+            },
+          },
           quantity: 1,
         }],
         mode: 'subscription',
@@ -206,12 +216,16 @@ serve(async (req) => {
           user_id: user.id,
           plan_name: planName,
         },
+        allow_promotion_codes: true,
+        billing_address_collection: 'required',
       });
 
       logStep("Checkout session created successfully", { 
         sessionId: session.id, 
         url: session.url,
         planName,
+        amount: planConfig.amount,
+        currency: 'eur',
         customerId,
         success_url: `${origin}/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/?canceled=true`
