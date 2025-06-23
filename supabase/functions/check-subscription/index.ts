@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -138,10 +139,11 @@ serve(async (req) => {
       logStep("ERROR: Database query failed", { error: subscriberError.message });
     }
 
-    // Inicializar Stripe con timeout configurado
+    // Inicializar Stripe con timeout aumentado para producción
+    console.log("🔧 Initializing Stripe with increased timeout...");
     const stripe = new Stripe(stripeKey, { 
       apiVersion: "2023-10-16",
-      timeout: 4000,
+      timeout: 10000, // 10 segundos para producción
     });
     
     let customerId = subscriberData?.stripe_customer_id;
@@ -161,13 +163,19 @@ serve(async (req) => {
       logStep("No stripe_customer_id found in DB, searching by email");
       
       try {
+        console.log("⏱️  Before Stripe customers.list call...");
+        const startTime = Date.now();
+        
         const customers = await withTimeout(
           stripe.customers.list({ 
             email: user.email, 
             limit: 1,
           }),
-          3000
+          8000
         );
+        
+        const endTime = Date.now();
+        console.log(`⏱️  Stripe customers.list took ${endTime - startTime}ms`);
         
         if (customers.data.length === 0) {
           logStep("No customer found in Stripe, updating unsubscribed state");
@@ -202,11 +210,15 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         }, { onConflict: 'email' });
       } catch (customerError) {
+        console.error("🚨 Customer lookup failed:", customerError);
         logStep("ERROR: Failed to fetch customer from Stripe", { error: customerError });
-        // Return early con estado no suscrito en caso de timeout del customer
+        
+        // Fallback temporal para debug en producción
         return new Response(JSON.stringify({ 
-          subscribed: false,
-          error: "Customer lookup timeout"
+          error: "stripe_timeout_test",
+          stripeKey: stripeKey?.slice(0, 10),
+          errorMessage: customerError.message,
+          subscribed: false
         }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -217,23 +229,28 @@ serve(async (req) => {
       console.log('🔑 Usando stripe_customer_id desde cache:', customerId);
     }
 
-    // Usar directamente el customer_id para buscar suscripciones (CORREGIDO)
+    // Usar directamente el customer_id para buscar suscripciones
     logStep("Checking subscriptions with customer_id");
     console.log('🔍 Consultando suscripciones para customer:', customerId);
     
     let subscriptions;
     try {
-      // CORREGIDO: Usar status: 'all' para incluir trialing, active, past_due, etc.
+      console.log("⏱️  Before Stripe subscriptions.list call...");
+      const startTime = Date.now();
+      
       subscriptions = await withTimeout(
         stripe.subscriptions.list({
           customer: customerId,
-          status: "all", // Cambio clave: incluir todos los estados
-          limit: 10, // Aumentar límite para ver más suscripciones
+          status: "all",
+          limit: 10,
         }),
-        3000
+        8000
       );
       
+      const endTime = Date.now();
+      console.log(`⏱️  Stripe subscriptions.list took ${endTime - startTime}ms`);
       console.log('📦 Subs found:', subscriptions.data.length);
+      
       if (subscriptions.data.length > 0) {
         console.log('🧾 First subscription status:', subscriptions.data[0]?.status);
         console.log('🧾 All subscription statuses:', subscriptions.data.map(s => s.status));
@@ -245,33 +262,23 @@ serve(async (req) => {
       });
       
     } catch (subscriptionError) {
+      console.error("🚨 Subscription lookup failed:", subscriptionError);
       logStep("ERROR: Failed to fetch subscriptions from Stripe", { error: subscriptionError });
       
-      // Return early con el estado actual en DB si Stripe falla
-      if (subscriberData) {
-        logStep("Returning cached subscription state due to Stripe timeout");
-        return new Response(JSON.stringify({
-          subscribed: subscriberData.subscribed || false,
-          subscription_tier: subscriberData.subscription_tier || null,
-          subscription_end: subscriberData.subscription_end || null,
-          cached: true
-        }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-      
-      // Si no hay datos cached, devolver no suscrito
+      // Fallback temporal para debug en producción
       return new Response(JSON.stringify({ 
-        subscribed: false,
-        error: "Subscription check timeout"
+        error: "stripe_subscription_timeout_test",
+        stripeKey: stripeKey?.slice(0, 10),
+        customerId: customerId?.slice(0, 8),
+        errorMessage: subscriptionError.message,
+        subscribed: false
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
     
-    // CORREGIDO: Verificar estados válidos de suscripción
+    // Verificar estados válidos de suscripción
     const validStatuses = ['active', 'trialing', 'past_due'];
     const activeSub = subscriptions.data.find(sub => validStatuses.includes(sub.status));
     const hasActiveSub = !!activeSub;
@@ -293,8 +300,15 @@ serve(async (req) => {
       });
       
       try {
+        console.log("⏱️  Before Stripe price.retrieve call...");
+        const startTime = Date.now();
+        
         const priceId = activeSub.items.data[0].price.id;
-        const price = await withTimeout(stripe.prices.retrieve(priceId), 2000);
+        const price = await withTimeout(stripe.prices.retrieve(priceId), 5000);
+        
+        const endTime = Date.now();
+        console.log(`⏱️  Stripe price.retrieve took ${endTime - startTime}ms`);
+        
         const amount = price.unit_amount || 0;
         
         // Map amounts to tiers securely
@@ -307,6 +321,7 @@ serve(async (req) => {
         }
         logStep("Determined subscription tier", { priceId, amount, subscriptionTier });
       } catch (priceError) {
+        console.error("🚨 Price lookup failed:", priceError);
         logStep("WARNING: Failed to fetch price details", { error: priceError });
         subscriptionTier = "Básico"; // Default tier si no podemos determinar el precio
       }
@@ -323,6 +338,9 @@ serve(async (req) => {
     logStep("Final subscription data to return", finalSubscriptionData);
 
     // Update database with validated data
+    console.log("⏱️  Before database update...");
+    const dbStartTime = Date.now();
+    
     await supabaseClient.from("subscribers").upsert({
       email: user.email,
       user_id: user.id,
@@ -332,6 +350,9 @@ serve(async (req) => {
       subscription_end: subscriptionEnd,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'email' });
+
+    const dbEndTime = Date.now();
+    console.log(`⏱️  Database update took ${dbEndTime - dbStartTime}ms`);
 
     logStep("Updated database with subscription info", { subscribed: hasActiveSub, subscriptionTier });
     
@@ -347,12 +368,17 @@ serve(async (req) => {
     console.error('[🔥 ERROR STACK]', error instanceof Error ? error.stack : 'No stack trace');
     logStep("ERROR in check-subscription", { message: errorMessage });
     
-    // Return generic error message to avoid information disclosure
+    // Fallback temporal para debug en producción con más detalles
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     return new Response(JSON.stringify({ 
-      error: "Unable to check subscription status" 
+      error: "stripe_general_timeout_test",
+      stripeKey: stripeKey?.slice(0, 10),
+      errorMessage: errorMessage,
+      errorStack: error instanceof Error ? error.stack?.substring(0, 500) : 'No stack',
+      subscribed: false
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
+      status: 200, // Cambio a 200 para poder ver la respuesta de debug
     });
   }
 });
