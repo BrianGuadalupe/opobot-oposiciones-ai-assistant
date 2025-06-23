@@ -30,7 +30,7 @@ export const useQueryLimits = () => {
     console.log('Session:', !!session);
 
     if (!session || !user) {
-      console.log('No session or user for limit check');
+      console.log('❌ No session or user for limit check');
       return {
         canProceed: false,
         reason: 'no_auth',
@@ -41,7 +41,7 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
-      console.log('Invoking manage-usage function...');
+      console.log('🔍 Invoking manage-usage function for check_limit...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
@@ -49,18 +49,35 @@ export const useQueryLimits = () => {
         },
       });
 
+      console.log('📥 Manage-usage raw response:', { 
+        hasData: !!data, 
+        hasError: !!error,
+        dataKeys: data ? Object.keys(data) : [],
+        errorMessage: error?.message
+      });
+
       if (error) {
-        console.error('Error in manage-usage function:', error);
+        console.error('❌ Error in manage-usage function:', error);
         throw error;
       }
 
-      console.log('Manage-usage response:', data);
+      // Verificar que la respuesta tenga la estructura esperada
+      if (!data || typeof data.canProceed === 'undefined') {
+        console.error('❌ Invalid response structure from manage-usage:', data);
+        throw new Error('Respuesta inválida del servidor');
+      }
+
+      console.log('✅ Manage-usage response processed:', {
+        canProceed: data.canProceed,
+        reason: data.reason,
+        hasUsageData: !!data.usageData
+      });
 
       const result: LimitCheckResult = data;
       
       if (result.usageData) {
         setUsageData(result.usageData);
-        console.log('Updated usage data:', result.usageData);
+        console.log('📊 Updated usage data:', result.usageData);
       }
 
       // Mostrar advertencias para demo
@@ -97,10 +114,11 @@ export const useQueryLimits = () => {
         });
       }
 
-      console.log('Limit check result:', result);
+      console.log('✅ Limit check completed successfully:', result);
       return result;
     } catch (error) {
-      console.error('Error checking query limit:', error);
+      console.error('💥 Error checking query limit:', error);
+      console.error('💥 Error stack:', error.stack);
       return {
         canProceed: false,
         reason: 'error',
@@ -113,12 +131,12 @@ export const useQueryLimits = () => {
 
   const logQuery = async (queryText: string, responseLength: number) => {
     if (!session || !user) {
-      console.log('No session or user for logging query');
+      console.log('❌ No session or user for logging query');
       return;
     }
 
     try {
-      console.log('Logging query to manage-usage...');
+      console.log('📝 Logging query to manage-usage...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
           action: 'log_query',
@@ -131,25 +149,25 @@ export const useQueryLimits = () => {
       });
 
       if (error) {
-        console.error('Error logging query:', error);
+        console.error('❌ Error logging query:', error);
       } else {
-        console.log('Query logged successfully:', data);
+        console.log('✅ Query logged successfully:', data);
         // Actualizar datos de uso después de registrar
         await loadUsageData();
       }
     } catch (error) {
-      console.error('Error logging query:', error);
+      console.error('💥 Error logging query:', error);
     }
   };
 
   const loadUsageData = async () => {
     if (!session || !user) {
-      console.log('No session or user for loading usage data');
+      console.log('❌ No session or user for loading usage data');
       return;
     }
 
     try {
-      console.log('Loading usage data...');
+      console.log('📊 Loading usage data...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'get_usage' },
         headers: {
@@ -158,7 +176,7 @@ export const useQueryLimits = () => {
       });
 
       if (error) {
-        console.error('Error loading usage data:', error);
+        console.error('❌ Error loading usage data:', error);
         throw error;
       }
       
@@ -169,17 +187,17 @@ export const useQueryLimits = () => {
           usagePercentage: data.usage_percentage,
           monthlyLimit: data.queries_this_month + data.queries_remaining_this_month
         };
-        console.log('Loaded usage data:', newUsageData);
+        console.log('📊 Loaded usage data:', newUsageData);
         setUsageData(newUsageData);
       }
     } catch (error) {
-      console.error('Error loading usage data:', error);
+      console.error('💥 Error loading usage data:', error);
     }
   };
 
   useEffect(() => {
     if (session && user) {
-      console.log('Loading initial usage data...');
+      console.log('🔄 Loading initial usage data...');
       loadUsageData();
     }
   }, [session, user]);
