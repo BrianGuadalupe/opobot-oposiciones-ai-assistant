@@ -37,7 +37,15 @@ export const useSubscription = () => {
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       
       console.log('=== CHECKING SUBSCRIPTION STATUS ===');
-      const data = await checkSubscriptionStatus(user.id, session.access_token);
+      
+      // Timeout de seguridad para evitar que se quede cargando indefinidamente
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Subscription check timeout')), 10000);
+      });
+      
+      const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
+      
+      const data = await Promise.race([checkPromise, timeoutPromise]) as any;
 
       setSubscriptionStatus({
         subscribed: data.subscribed,
@@ -50,6 +58,8 @@ export const useSubscription = () => {
     } catch (error) {
       console.error('Error checking subscription:', error);
       handleSecureError(error, 'Error al verificar el estado de la suscripción');
+      
+      // En caso de error, asumir que no está suscrito y dejar de cargar
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
@@ -118,10 +128,20 @@ export const useSubscription = () => {
 
   // Solo verificar suscripción una vez cuando el usuario esté autenticado
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
     if (user && session?.access_token && !isChecking) {
       console.log('Auth complete, checking subscription...');
-      checkSubscription();
+      
+      // Pequeño delay para evitar llamadas duplicadas inmediatas
+      timeoutId = setTimeout(() => {
+        checkSubscription();
+      }, 100);
     }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, [user?.id, session?.access_token]); // Dependencias más específicas
 
   return {

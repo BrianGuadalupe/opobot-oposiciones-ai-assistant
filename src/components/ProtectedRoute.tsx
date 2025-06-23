@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Navigate } from "react-router-dom";
@@ -42,46 +42,53 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
     return <Navigate to="/auth" replace />;
   }
 
-  // Si se requiere suscripción y aún se está cargando el estado de suscripción
-  if (requireSubscription && subscriptionLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 bg-gradient-to-r from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center mx-auto mb-4">
-            <span className="text-white font-bold">O</span>
-          </div>
-          <p>Verificando suscripción...</p>
-        </div>
-      </div>
-    );
+  // Si se requiere suscripción pero no hay usuario autenticado
+  if (requireSubscription && !user) {
+    console.log('❌ Subscription required but no user, redirecting to auth');
+    return <Navigate to="/auth" replace />;
   }
 
-  // Si se requiere suscripción pero el usuario no está suscrito (después de cargar)
-  if (requireSubscription && !subscriptionLoading && !subscribed) {
-    console.log('❌ Subscription required but user not subscribed, showing modal');
-    
-    // Mostrar el modal si no se ha mostrado ya
-    if (!showModal) {
-      setShowModal(true);
-    }
-    
-    return (
-      <>
-        <SubscriptionRequiredModal 
-          isOpen={showModal} 
-          onClose={() => setShowModal(false)} 
-        />
-        {/* Renderizar contenido de fondo mientras se muestra el modal */}
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+  // Si se requiere suscripción, verificar el estado
+  if (requireSubscription) {
+    // Si aún está cargando la verificación de suscripción, mostrar loading
+    if (subscriptionLoading) {
+      return (
+        <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="w-8 h-8 bg-gradient-to-r from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center mx-auto mb-4">
               <span className="text-white font-bold">O</span>
             </div>
-            <p>Verificando acceso...</p>
+            <p>Verificando suscripción...</p>
           </div>
         </div>
-      </>
-    );
+      );
+    }
+
+    // Una vez que termine de cargar, si no está suscrito, mostrar modal
+    if (!subscribed && !subscriptionLoading) {
+      console.log('❌ Subscription required but user not subscribed, showing modal');
+      
+      return (
+        <>
+          <SubscriptionRequiredModal 
+            isOpen={true}
+            onClose={() => {
+              console.log('Modal closed, redirecting to home');
+              window.location.href = '/';
+            }}
+          />
+          {/* Renderizar contenido de fondo mientras se muestra el modal */}
+          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+            <div className="text-center">
+              <div className="w-8 h-8 bg-gradient-to-r from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center mx-auto mb-4">
+                <span className="text-white font-bold">O</span>
+              </div>
+              <p>Verificando acceso...</p>
+            </div>
+          </div>
+        </>
+      );
+    }
   }
 
   console.log('✅ Access granted to protected route');
