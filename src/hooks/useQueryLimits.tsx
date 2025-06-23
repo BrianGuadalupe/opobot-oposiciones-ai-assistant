@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -26,8 +25,8 @@ export const useQueryLimits = () => {
 
   const checkQueryLimit = async (): Promise<LimitCheckResult> => {
     console.log('=== QUERY LIMIT CHECK START ===');
-    console.log('User exists:', !!user);
-    console.log('Session exists:', !!session);
+    console.log('👤 User exists:', !!user);
+    console.log('🔐 Session exists:', !!session);
 
     if (!session || !user) {
       console.log('❌ No session or user for limit check');
@@ -42,6 +41,8 @@ export const useQueryLimits = () => {
       setIsLoading(true);
       
       console.log('🔍 About to invoke manage-usage function for check_limit...');
+      console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
+      
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
@@ -50,10 +51,14 @@ export const useQueryLimits = () => {
       });
 
       console.log('📥 Manage-usage response received');
-      console.log('📥 Raw response data:', JSON.stringify(data, null, 2));
       console.log('📥 Response error:', error);
-      console.log('📥 Data type:', typeof data);
-      console.log('📥 Data keys:', data ? Object.keys(data) : 'no data');
+      console.log('📥 Response data type:', typeof data);
+      console.log('📥 Response data is null/undefined:', data == null);
+      
+      if (data) {
+        console.log('📥 Response data keys:', Object.keys(data));
+        console.log('📥 Raw response data:', JSON.stringify(data, null, 2));
+      }
 
       if (error) {
         console.error('❌ Error in manage-usage function:', error);
@@ -61,19 +66,27 @@ export const useQueryLimits = () => {
       }
 
       // Verificar que la respuesta tenga la estructura esperada
-      if (!data || typeof data.canProceed === 'undefined') {
-        console.error('❌ Invalid response structure from manage-usage:', data);
-        console.error('❌ Missing canProceed property');
+      if (!data || typeof data !== 'object') {
+        console.error('❌ Invalid response structure from manage-usage - not an object:', data);
         throw new Error('Respuesta inválida del servidor');
       }
 
+      if (typeof data.canProceed === 'undefined') {
+        console.error('❌ Missing canProceed property in response:', data);
+        throw new Error('Respuesta inválida del servidor - falta canProceed');
+      }
+
       console.log('✅ Valid response structure confirmed');
-      console.log('✅ canProceed value:', data.canProceed);
+      console.log('✅ canProceed raw value:', data.canProceed);
       console.log('✅ canProceed type:', typeof data.canProceed);
       console.log('✅ reason:', data.reason);
 
+      // Asegurar que canProceed es explícitamente boolean
+      const canProceed = Boolean(data.canProceed);
+      console.log('✅ canProceed converted to boolean:', canProceed);
+
       const result: LimitCheckResult = {
-        canProceed: Boolean(data.canProceed), // Asegurar que es boolean
+        canProceed: canProceed,
         reason: data.reason || 'unknown',
         message: data.message,
         usageData: data.usageData
@@ -120,11 +133,12 @@ export const useQueryLimits = () => {
       }
 
       console.log('✅ Limit check completed successfully, returning result');
+      console.log('✅ Final canProceed value being returned:', result.canProceed);
       return result;
     } catch (error) {
       console.error('💥 Error checking query limit:', error);
-      console.error('💥 Error message:', error.message);
-      console.error('💥 Error stack:', error.stack);
+      console.error('💥 Error message:', error?.message);
+      console.error('💥 Error stack:', error?.stack);
       return {
         canProceed: false,
         reason: 'error',
