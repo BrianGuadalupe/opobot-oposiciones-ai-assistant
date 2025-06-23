@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -57,13 +56,35 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    // Verificar variables de entorno críticas
+    // 🔐 Verificar variables de entorno críticas
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
       logStep("ERROR: Stripe key not configured");
       throw new Error("Service configuration error");
     }
+    
+    // ✅ Log de primeros caracteres de STRIPE_SECRET_KEY
+    console.log("🔐 Stripe key starts with:", stripeKey?.slice(0, 10));
     logStep("Stripe key verified");
+
+    // 🌐 Prueba de conectividad a Stripe manual
+    try {
+      console.log("🌐 Starting Stripe connectivity test...");
+      const stripePing = await fetch("https://api.stripe.com/v1/charges", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${stripeKey}`,
+        },
+      });
+      const status = stripePing.status;
+      const text = await stripePing.text();
+      console.log("🌐 Stripe connectivity test status:", status);
+      console.log("🌐 Stripe connectivity test body:", text.substring(0, 200));
+      logStep("Stripe connectivity test completed", { status });
+    } catch (err) {
+      console.error("🚨 Stripe test fetch failed:", err);
+      logStep("ERROR: Stripe connectivity test failed", { error: err.message });
+    }
 
     // Verificar autorización
     const authHeader = req.headers.get("Authorization");
