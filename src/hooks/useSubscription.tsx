@@ -14,11 +14,19 @@ export const useSubscription = () => {
     loading: true,
   });
   const [isChecking, setIsChecking] = useState(false);
+  const [lastCheckTime, setLastCheckTime] = useState<number>(0);
 
-  const checkSubscription = useCallback(async () => {
-    // Evitar llamadas simultáneas
-    if (isChecking) {
-      console.log('Subscription check already in progress, skipping...');
+  const checkSubscription = useCallback(async (forceRefresh: boolean = false) => {
+    console.log('=== SUBSCRIPTION CHECK START ===');
+    console.log('Force refresh:', forceRefresh);
+    console.log('Is checking:', isChecking);
+    console.log('User:', !!user);
+    console.log('Session:', !!session);
+
+    // Evitar llamadas simultáneas y muy frecuentes
+    const now = Date.now();
+    if (!forceRefresh && (isChecking || (now - lastCheckTime) < 5000)) {
+      console.log('Subscription check skipped - too frequent or already in progress');
       return;
     }
 
@@ -34,18 +42,41 @@ export const useSubscription = () => {
 
     try {
       setIsChecking(true);
+      setLastCheckTime(now);
       setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       
-      console.log('=== CHECKING SUBSCRIPTION STATUS ===');
+      console.log('Checking local subscription data first...');
       
-      // Timeout de seguridad para evitar que se quede cargando indefinidamente
+      // Primero intentar obtener datos locales
+      const { data: localData, error: localError } = await supabase
+        .from('subscribers')
+        .select('subscribed, subscription_tier, subscription_end')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!localError && localData && !forceRefresh) {
+        console.log('Using local subscription data:', localData);
+        setSubscriptionStatus({
+          subscribed: localData.subscribed,
+          subscription_tier: localData.subscription_tier,
+          subscription_end: localData.subscription_end,
+          loading: false,
+        });
+        return;
+      }
+
+      console.log('Fetching fresh subscription data from Stripe...');
+      
+      // Timeout de seguridad
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Subscription check timeout')), 10000);
+        setTimeout(() => reject(new Error('Subscription check timeout')), 15000);
       });
       
       const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
       
       const data = await Promise.race([checkPromise, timeoutPromise]) as any;
+
+      console.log('Fresh subscription data received:', data);
 
       setSubscriptionStatus({
         subscribed: data.subscribed,
@@ -54,9 +85,9 @@ export const useSubscription = () => {
         loading: false,
       });
       
-      console.log('✅ Subscription check completed:', data);
+      console.log('✅ Subscription check completed successfully');
     } catch (error) {
-      console.error('Error checking subscription:', error);
+      console.error('❌ Error checking subscription:', error);
       handleSecureError(error, 'Error al verificar el estado de la suscripción');
       
       // En caso de error, asumir que no está suscrito y dejar de cargar
@@ -67,7 +98,7 @@ export const useSubscription = () => {
     } finally {
       setIsChecking(false);
     }
-  }, [user, session?.access_token, isChecking]);
+  }, [user, session?.access_token, isChecking, lastCheckTime]);
 
   // Función principal de redirección a Stripe Checkout
   const redirectToStripeCheckout = async (planName: string) => {
@@ -131,12 +162,12 @@ export const useSubscription = () => {
     let timeoutId: NodeJS.Timeout;
     
     if (user && session?.access_token && !isChecking) {
-      console.log('Auth complete, checking subscription...');
+      console.log('Auth complete, scheduling subscription check...');
       
       // Pequeño delay para evitar llamadas duplicadas inmediatas
       timeoutId = setTimeout(() => {
-        checkSubscription();
-      }, 100);
+        checkSubscription(false);
+      }, 500);
     }
 
     return () => {

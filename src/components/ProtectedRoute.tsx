@@ -17,47 +17,106 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
 
   useEffect(() => {
     const checkAccess = async () => {
+      console.log('=== PROTECTED ROUTE CHECK ACCESS ===');
+      console.log('User:', !!user);
+      console.log('Session:', !!session);
+      console.log('Require subscription:', requireSubscription);
+
       if (!user || !session) {
+        console.log('No user or session, redirecting to auth');
         navigate('/auth');
         return;
       }
 
       if (!requireSubscription) {
+        console.log('No subscription required, granting access');
         setHasAccess(true);
         setIsLoading(false);
         return;
       }
 
       try {
+        console.log('Checking subscription status...');
+        
         // Verificar si es usuario demo
-        const { data: usageData } = await supabase
+        const { data: usageData, error: usageError } = await supabase
           .from('user_usage')
-          .select('is_demo_user')
+          .select('is_demo_user, subscription_tier, queries_remaining_this_month')
           .eq('user_id', user.id)
           .single();
 
+        if (usageError) {
+          console.error('Error fetching usage data:', usageError);
+        } else {
+          console.log('Usage data:', usageData);
+        }
+
         if (usageData?.is_demo_user) {
-          // Usuario demo tiene acceso
-          setHasAccess(true);
+          console.log('Demo user detected, checking remaining queries');
+          if (usageData.queries_remaining_this_month > 0) {
+            console.log('Demo user has queries remaining, granting access');
+            setHasAccess(true);
+          } else {
+            console.log('Demo user has no queries remaining, redirecting with demo_expired');
+            navigate('/?demo_expired=true');
+            return;
+          }
           setIsLoading(false);
           return;
         }
 
         // Verificar suscripción para usuarios normales
-        const { data: subscription } = await supabase
+        console.log('Checking subscription for normal user...');
+        const { data: subscription, error: subError } = await supabase
           .from('subscribers')
-          .select('subscribed')
+          .select('subscribed, subscription_tier, subscription_end')
           .eq('user_id', user.id)
           .single();
 
-        if (subscription?.subscribed) {
-          setHasAccess(true);
+        if (subError) {
+          console.error('Error checking subscription:', subError);
+          // Si hay error, intentar verificar con la función de check-subscription
+          try {
+            console.log('Attempting to refresh subscription status...');
+            const { data: refreshData, error: refreshError } = await supabase.functions.invoke('check-subscription', {
+              headers: {
+                Authorization: `Bearer ${session.access_token}`,
+              },
+            });
+            
+            if (refreshError) {
+              console.error('Error refreshing subscription:', refreshError);
+              navigate('/?subscription_required=true');
+              return;
+            }
+            
+            console.log('Refreshed subscription data:', refreshData);
+            if (refreshData?.subscribed) {
+              setHasAccess(true);
+            } else {
+              navigate('/?subscription_required=true');
+              return;
+            }
+          } catch (refreshError) {
+            console.error('Failed to refresh subscription:', refreshError);
+            navigate('/?subscription_required=true');
+            return;
+          }
         } else {
-          navigate('/?subscription_required=true');
+          console.log('Subscription data:', subscription);
+          if (subscription?.subscribed) {
+            console.log('User has active subscription, granting access');
+            setHasAccess(true);
+          } else {
+            console.log('User has no active subscription, redirecting');
+            navigate('/?subscription_required=true');
+            return;
+          }
         }
       } catch (error) {
-        console.error('Error checking access:', error);
+        console.error('Unexpected error checking access:', error);
         navigate('/?subscription_required=true');
+        return;
       } finally {
         setIsLoading(false);
       }

@@ -19,13 +19,18 @@ interface LimitCheckResult {
 }
 
 export const useQueryLimits = () => {
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { toast } = useToast();
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const checkQueryLimit = async (): Promise<LimitCheckResult> => {
-    if (!session) {
+    console.log('=== QUERY LIMIT CHECK START ===');
+    console.log('User:', !!user);
+    console.log('Session:', !!session);
+
+    if (!session || !user) {
+      console.log('No session or user for limit check');
       return {
         canProceed: false,
         reason: 'no_auth',
@@ -36,6 +41,7 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
+      console.log('Invoking manage-usage function...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
@@ -43,12 +49,18 @@ export const useQueryLimits = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error in manage-usage function:', error);
+        throw error;
+      }
+
+      console.log('Manage-usage response:', data);
 
       const result: LimitCheckResult = data;
       
       if (result.usageData) {
         setUsageData(result.usageData);
+        console.log('Updated usage data:', result.usageData);
       }
 
       // Mostrar advertencias para demo
@@ -85,6 +97,7 @@ export const useQueryLimits = () => {
         });
       }
 
+      console.log('Limit check result:', result);
       return result;
     } catch (error) {
       console.error('Error checking query limit:', error);
@@ -99,10 +112,14 @@ export const useQueryLimits = () => {
   };
 
   const logQuery = async (queryText: string, responseLength: number) => {
-    if (!session) return;
+    if (!session || !user) {
+      console.log('No session or user for logging query');
+      return;
+    }
 
     try {
-      await supabase.functions.invoke('manage-usage', {
+      console.log('Logging query to manage-usage...');
+      const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
           action: 'log_query',
           queryText,
@@ -113,17 +130,26 @@ export const useQueryLimits = () => {
         },
       });
 
-      // Actualizar datos de uso después de registrar
-      await loadUsageData();
+      if (error) {
+        console.error('Error logging query:', error);
+      } else {
+        console.log('Query logged successfully:', data);
+        // Actualizar datos de uso después de registrar
+        await loadUsageData();
+      }
     } catch (error) {
       console.error('Error logging query:', error);
     }
   };
 
   const loadUsageData = async () => {
-    if (!session) return;
+    if (!session || !user) {
+      console.log('No session or user for loading usage data');
+      return;
+    }
 
     try {
+      console.log('Loading usage data...');
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'get_usage' },
         headers: {
@@ -131,15 +157,20 @@ export const useQueryLimits = () => {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading usage data:', error);
+        throw error;
+      }
       
       if (data) {
-        setUsageData({
+        const newUsageData = {
           queriesUsed: data.queries_this_month,
           queriesRemaining: data.queries_remaining_this_month,
           usagePercentage: data.usage_percentage,
           monthlyLimit: data.queries_this_month + data.queries_remaining_this_month
-        });
+        };
+        console.log('Loaded usage data:', newUsageData);
+        setUsageData(newUsageData);
       }
     } catch (error) {
       console.error('Error loading usage data:', error);
@@ -147,10 +178,11 @@ export const useQueryLimits = () => {
   };
 
   useEffect(() => {
-    if (session) {
+    if (session && user) {
+      console.log('Loading initial usage data...');
       loadUsageData();
     }
-  }, [session]);
+  }, [session, user]);
 
   return {
     usageData,
