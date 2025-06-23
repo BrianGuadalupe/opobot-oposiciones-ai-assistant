@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, EyeOff } from "lucide-react";
 import { useDemoRegistration } from "@/hooks/useDemoRegistration";
-import Bot from "@/components/ui/bot";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
