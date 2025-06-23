@@ -2,6 +2,7 @@
 import { supabase } from '@/integrations/supabase/client';
 import { handleSecureError } from '@/utils/securityUtils';
 import { toast } from '@/hooks/use-toast';
+import { networkDiagnostics } from './networkDiagnostics';
 
 export const checkSubscriptionStatus = async (
   userId: string,
@@ -48,13 +49,50 @@ export const createStripeCheckout = async (
   console.log('Access token length:', accessToken?.length || 0);
   console.log('Supabase URL:', 'https://dozaqjmdoblwqnuprxnq.supabase.co');
   
+  // Activar monitoreo de red
+  networkDiagnostics.monitorNetworkRequests();
+  
   try {
-    console.log('🔄 Invocando función create-checkout...');
-    console.log('Function URL: https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/create-checkout');
-    console.log('Request body:', { planName });
-    console.log('Request headers:', {
-      Authorization: `Bearer ${accessToken.substring(0, 20)}...`,
-      'Content-Type': 'application/json',
+    // Paso 1: Test de conectividad básica
+    console.log('🔄 Step 1: Testing basic Supabase connectivity...');
+    const connectivityTest = await networkDiagnostics.testSupabaseConnection();
+    if (!connectivityTest) {
+      throw new Error('No se puede conectar con Supabase - problema de red');
+    }
+    
+    // Paso 2: Test directo de la función
+    console.log('🔄 Step 2: Testing direct function call...');
+    const directTest = await networkDiagnostics.testDirectFunctionCall(accessToken);
+    console.log('Direct test result:', directTest);
+    
+    if (directTest.success && directTest.body) {
+      try {
+        const directData = JSON.parse(directTest.body);
+        if (directData.url) {
+          console.log('✅ Direct function call worked! URL:', directData.url);
+          
+          toast({
+            title: "Redirigiendo a Stripe",
+            description: "Sesión de checkout creada correctamente (método directo)",
+            variant: "default",
+          });
+          
+          return directData;
+        }
+      } catch (parseError) {
+        console.log('Direct response not JSON, trying Supabase client...');
+      }
+    }
+    
+    // Paso 3: Método original con el cliente de Supabase
+    console.log('🔄 Step 3: Using Supabase client method...');
+    console.log('Calling supabase.functions.invoke with params:', {
+      functionName: 'create-checkout',
+      body: { planName },
+      headers: {
+        Authorization: `Bearer ${accessToken.substring(0, 20)}...`,
+        'Content-Type': 'application/json',
+      }
     });
     
     const startTime = Date.now();
@@ -67,14 +105,13 @@ export const createStripeCheckout = async (
     });
     const endTime = Date.now();
 
-    console.log('Function call completado en:', endTime - startTime, 'ms');
-    console.log('Create checkout respuesta completa:', { data, error });
+    console.log('Supabase client call completed in:', endTime - startTime, 'ms');
+    console.log('Supabase client response:', { data, error });
 
     if (error) {
-      console.error('❌ Error de función Supabase:', error);
+      console.error('❌ Supabase client error:', error);
       console.error('Error details:', JSON.stringify(error, null, 2));
       
-      // Mostrar toast con el error específico
       toast({
         title: "Error de Stripe Checkout",
         description: error.message || 'Error desconocido al crear sesión de checkout',
@@ -101,7 +138,7 @@ export const createStripeCheckout = async (
     }
 
     if (!data) {
-      console.error('❌ No se recibieron datos de create-checkout');
+      console.error('❌ No se recibieron datos del cliente de Supabase');
       toast({
         title: "Error",
         description: "No se recibió respuesta del servidor",
@@ -110,7 +147,7 @@ export const createStripeCheckout = async (
       throw new Error('No response data received');
     }
 
-    console.log('📦 Datos recibidos:', data);
+    console.log('📦 Datos recibidos del cliente:', data);
 
     if (!data.url) {
       console.error('❌ No hay URL de checkout en la respuesta:', data);
@@ -126,7 +163,6 @@ export const createStripeCheckout = async (
     console.log('Checkout URL:', data.url);
     console.log('Session ID:', data.sessionId);
 
-    // Toast de éxito
     toast({
       title: "Redirigiendo a Stripe",
       description: "Sesión de checkout creada correctamente",

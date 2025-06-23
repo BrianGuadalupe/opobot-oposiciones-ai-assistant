@@ -10,6 +10,7 @@ import Footer from "@/components/Footer";
 import ChatDemoExample from "@/components/ChatDemoExample";
 import SubscriptionRequired from "@/components/SubscriptionRequired";
 import DebugPanel from "@/components/DebugPanel";
+import NetworkDiagnosticPanel from "@/components/NetworkDiagnosticPanel";
 
 const Index = () => {
   console.log('🏠 Index page rendered');
@@ -36,6 +37,7 @@ const Index = () => {
       <>
         <SubscriptionRequired />
         <DebugPanel />
+        <NetworkDiagnosticPanel />
       </>
     );
   }
@@ -56,6 +58,7 @@ const Index = () => {
       <Testimonials />
       <Footer />
       <DebugPanel />
+      <NetworkDiagnosticPanel />
     </div>
   );
 };
