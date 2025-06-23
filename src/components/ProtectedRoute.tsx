@@ -38,18 +38,21 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
       try {
         console.log('Checking subscription status with Stripe...');
         
-        // Usar timeout más corto para la verificación en ProtectedRoute
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000); // 6 segundos
+        // Usar timeout con Promise.race para la verificación en ProtectedRoute
+        const timeoutPromise = new Promise((_, reject) => {
+          setTimeout(() => reject(new Error('Subscription check timeout')), 6000);
+        });
         
-        const { data: refreshData, error: refreshError } = await supabase.functions.invoke('check-subscription', {
+        const subscriptionPromise = supabase.functions.invoke('check-subscription', {
           headers: {
             Authorization: `Bearer ${session.access_token}`,
           },
-          signal: controller.signal,
         });
         
-        clearTimeout(timeoutId);
+        const { data: refreshData, error: refreshError } = await Promise.race([
+          subscriptionPromise,
+          timeoutPromise
+        ]) as any;
         
         if (refreshError) {
           console.error('Error checking subscription:', refreshError);
@@ -101,7 +104,7 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
         console.error('Unexpected error checking access:', error);
         
         // Si es timeout, verificar si es usuario demo
-        if (error instanceof Error && (error.name === 'AbortError' || error.message.includes('timeout'))) {
+        if (error instanceof Error && error.message.includes('timeout')) {
           console.log('Timeout in access check, trying demo user fallback...');
           try {
             const { data: usageData, error: usageError } = await supabase
