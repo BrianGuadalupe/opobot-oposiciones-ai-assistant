@@ -1,8 +1,10 @@
+
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useFrequentQuestions } from './useFrequentQuestions';
+import { useQueryLimits } from './useQueryLimits';
 
 export interface ChatMessage {
   id: string;
@@ -17,6 +19,7 @@ export const useChat = () => {
   const { session } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
+  const { checkQueryLimit, logQuery } = useQueryLimits();
 
   const sendMessage = async (content: string) => {
     if (!session) {
@@ -25,6 +28,26 @@ export const useChat = () => {
         description: "Debes iniciar sesión para usar el chat",
         variant: "destructive",
       });
+      return;
+    }
+
+    // Verificar límite antes de procesar
+    const limitCheck = await checkQueryLimit();
+    
+    if (!limitCheck.canProceed) {
+      if (limitCheck.reason === 'limit_reached') {
+        toast({
+          title: "🚫 Límite Alcanzado",
+          description: limitCheck.message || "Has alcanzado el límite de consultas mensuales",
+          variant: "destructive",
+        });
+      } else if (limitCheck.reason === 'no_subscription') {
+        toast({
+          title: "Suscripción Requerida",
+          description: limitCheck.message || "Necesitas una suscripción activa",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -73,6 +96,9 @@ export const useChat = () => {
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Registrar la consulta después de completarse exitosamente
+      await logQuery(content, data.message.length);
 
     } catch (error) {
       console.error('Error sending message:', error);

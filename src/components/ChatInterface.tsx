@@ -6,6 +6,7 @@ import { useChat } from '@/hooks/useChat';
 import { Textarea } from "@/components/ui/textarea";
 import ChatBubbleMessage from './ChatBubbleMessage';
 import ChatAIThinking from './ChatAIThinking';
+import UsageIndicator from './UsageIndicator';
 
 const ChatInterface = () => {
   const [inputMessage, setInputMessage] = useState('');
@@ -48,10 +49,15 @@ const ChatInterface = () => {
 
   return (
     <div className="flex-1 flex flex-col h-screen w-full relative">
+      {/* Indicador de uso en la parte superior */}
+      <div className="px-2 sm:px-0 sm:max-w-2xl mx-auto w-full pt-4">
+        <UsageIndicator />
+      </div>
+
       {/* Bloque de mensajes */}
       <div
         ref={scrollableContainer}
-        className="flex-1 overflow-y-auto pt-8 pb-36 px-2 sm:px-0 sm:max-w-2xl mx-auto w-full"
+        className="flex-1 overflow-y-auto pt-4 pb-36 px-2 sm:px-0 sm:max-w-2xl mx-auto w-full"
         style={{ background: "#f7f7fb" }}
         onScroll={handleScroll}
       >

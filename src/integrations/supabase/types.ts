@@ -99,6 +99,33 @@ export type Database = {
         }
         Relationships: []
       }
+      query_logs: {
+        Row: {
+          created_at: string
+          id: string
+          month_year: string
+          query_text: string
+          response_length: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month_year?: string
+          query_text: string
+          response_length?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month_year?: string
+          query_text?: string
+          response_length?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       subscribers: {
         Row: {
           created_at: string
@@ -165,12 +192,69 @@ export type Database = {
         }
         Relationships: []
       }
+      user_usage: {
+        Row: {
+          created_at: string
+          current_period_end: string
+          current_period_start: string
+          email: string
+          id: string
+          is_active: boolean
+          months_with_active_subscription: number
+          queries_per_month: number
+          queries_remaining_this_month: number
+          queries_this_month: number
+          subscription_tier: string | null
+          total_queries: number
+          updated_at: string
+          usage_percentage: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          months_with_active_subscription?: number
+          queries_per_month?: number
+          queries_remaining_this_month?: number
+          queries_this_month?: number
+          subscription_tier?: string | null
+          total_queries?: number
+          updated_at?: string
+          usage_percentage?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          months_with_active_subscription?: number
+          queries_per_month?: number
+          queries_remaining_this_month?: number
+          queries_this_month?: number
+          subscription_tier?: string | null
+          total_queries?: number
+          updated_at?: string
+          usage_percentage?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_plan_limit: {
+        Args: { plan_tier: string }
+        Returns: number
+      }
     }
     Enums: {
       [_ in never]: never
