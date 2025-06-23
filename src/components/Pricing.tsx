@@ -10,6 +10,7 @@ import { useAuth } from "@/hooks/useAuth";
 const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, subscription_tier, redirectToStripeCheckout, openCustomerPortal } = useSubscription();
+  const [isRedirecting, setIsRedirecting] = useState<string | null>(null);
   
   // Frontend: Solo datos de presentación (no críticos)
   const plans = [
@@ -58,7 +59,7 @@ const Pricing = () => {
     }
   ];
 
-  const handleSubscribe = (planName: string) => {
+  const handleSubscribe = async (planName: string) => {
     console.log('=== PRICING - SUBSCRIBE CLICKED ===');
     console.log('Plan:', planName);
     console.log('User authenticated:', !!user);
@@ -69,8 +70,16 @@ const Pricing = () => {
       return;
     }
 
-    // Redirigir directamente a Stripe Checkout externo
-    redirectToStripeCheckout(planName);
+    // Mostrar estado de loading en el botón
+    setIsRedirecting(planName);
+
+    try {
+      // Redirigir a Stripe Checkout
+      await redirectToStripeCheckout(planName);
+    } catch (error) {
+      console.error('Error in subscription process:', error);
+      setIsRedirecting(null);
+    }
   };
 
   const isCurrentPlan = (planName: string) => {
@@ -110,6 +119,7 @@ const Pricing = () => {
         <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
           {plans.map((plan, index) => {
             const isCurrent = isCurrentPlan(plan.name);
+            const isLoading = isRedirecting === plan.name;
             
             return (
               <Card 
@@ -176,11 +186,21 @@ const Pricing = () => {
                   ) : (
                     <Button 
                       onClick={() => handleSubscribe(plan.name)}
-                      className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark"
+                      disabled={isLoading}
+                      className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark disabled:opacity-50"
                       size="lg"
                     >
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      {user ? 'Suscribirse' : 'Comenzar Gratis'}
+                      {isLoading ? (
+                        <>
+                          <div className="w-4 h-4 mr-2 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                          Redirigiendo...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="w-4 h-4 mr-2" />
+                          {user ? 'Suscribirse' : 'Comenzar Gratis'}
+                        </>
+                      )}
                     </Button>
                   )}
                 </CardContent>

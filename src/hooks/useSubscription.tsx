@@ -56,29 +56,86 @@ export const useSubscription = () => {
     }
   }, [user, session?.access_token, subscriptionStatus.loading]);
 
-  // Usar la función create-checkout para crear sesiones con webhooks
+  // Función principal de redirección a Stripe Checkout
   const redirectToStripeCheckout = async (planName: string) => {
-    console.log('=== CREATING STRIPE CHECKOUT SESSION ===');
+    console.log('=== STRIPE CHECKOUT REDIRECT START ===');
     console.log('Plan:', planName);
+    console.log('User:', !!user);
+    console.log('Session:', !!session?.access_token);
     
     if (!user || !session?.access_token) {
-      console.log('No user session for checkout');
+      console.log('❌ No user session for checkout');
+      handleSecureError(new Error('No authenticated session'), 'Debes iniciar sesión para suscribirte');
       return;
     }
 
     try {
-      console.log('Creating checkout session via Supabase function...');
+      console.log('🔄 Creating checkout session...');
       const data = await createStripeCheckout(planName, session.access_token);
       
-      if (data?.url) {
-        console.log('Redirecting to Stripe Checkout:', data.url);
-        window.location.href = data.url;
-      } else {
-        console.error('No checkout URL received');
-        handleSecureError(new Error('No checkout URL received'), 'Error al crear la sesión de pago');
+      console.log('✅ Checkout session created:', data);
+      
+      if (!data?.url) {
+        throw new Error('No se recibió la URL de checkout de Stripe');
       }
+
+      console.log('🌐 Redirecting to Stripe Checkout URL:', data.url);
+      
+      // Opción 1: Redirección directa (recomendada)
+      console.log('Using window.location.href for redirect...');
+      window.location.href = data.url;
+      
     } catch (error) {
-      console.error('Error creating checkout session:', error);
+      console.error('❌ Error in checkout redirect:', error);
+      handleSecureError(error, 'Error al crear la sesión de pago');
+    }
+  };
+
+  // Función alternativa usando sessionId (si prefieres esta opción)
+  const redirectToStripeCheckoutWithSessionId = async (planName: string) => {
+    console.log('=== STRIPE CHECKOUT WITH SESSION ID START ===');
+    console.log('Plan:', planName);
+    
+    if (!user || !session?.access_token) {
+      console.log('❌ No user session for checkout');
+      handleSecureError(new Error('No authenticated session'), 'Debes iniciar sesión para suscribirte');
+      return;
+    }
+
+    try {
+      console.log('🔄 Creating checkout session...');
+      const data = await createStripeCheckout(planName, session.access_token);
+      
+      console.log('✅ Checkout session created:', data);
+      
+      if (!data?.sessionId) {
+        throw new Error('No se recibió el sessionId de Stripe');
+      }
+
+      console.log('🌐 Redirecting with sessionId:', data.sessionId);
+      
+      // Opción 2: Usando Stripe.js (requiere cargar Stripe en el frontend)
+      // Nota: Necesitarías instalar @stripe/stripe-js para usar esto
+      /*
+      const stripe = await loadStripe('tu_publishable_key_aquí');
+      if (stripe) {
+        const { error } = await stripe.redirectToCheckout({
+          sessionId: data.sessionId
+        });
+        if (error) {
+          console.error('Stripe redirect error:', error);
+          handleSecureError(error, 'Error al redirigir a Stripe');
+        }
+      }
+      */
+      
+      // Alternativa sin Stripe.js: construir URL manualmente
+      const checkoutUrl = `https://checkout.stripe.com/c/pay/${data.sessionId}`;
+      console.log('Constructed checkout URL:', checkoutUrl);
+      window.location.href = checkoutUrl;
+      
+    } catch (error) {
+      console.error('❌ Error in checkout redirect:', error);
       handleSecureError(error, 'Error al crear la sesión de pago');
     }
   };
@@ -120,6 +177,7 @@ export const useSubscription = () => {
     ...subscriptionStatus,
     checkSubscription,
     redirectToStripeCheckout,
+    redirectToStripeCheckoutWithSessionId, // Función alternativa
     openCustomerPortal,
   };
 };
