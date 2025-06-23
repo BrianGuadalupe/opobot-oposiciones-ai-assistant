@@ -36,9 +36,24 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
       }
 
       try {
-        console.log('Checking subscription status...');
+        console.log('Checking subscription status with local data first...');
         
-        // Verificar si es usuario demo
+        // Primero intentar obtener datos locales más rápido
+        const { data: localSubscriber, error: localError } = await supabase
+          .from('subscribers')
+          .select('subscribed, subscription_tier, subscription_end')
+          .eq('user_id', user.id)
+          .single();
+
+        if (!localError && localSubscriber?.subscribed) {
+          console.log('Local subscription valid, granting access');
+          setHasAccess(true);
+          setIsLoading(false);
+          return;
+        }
+
+        // Solo verificar demo si no hay suscripción local válida
+        console.log('Checking demo user status...');
         const { data: usageData, error: usageError } = await supabase
           .from('user_usage')
           .select('is_demo_user, subscription_tier, queries_remaining_this_month')
@@ -47,8 +62,8 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
 
         if (usageError) {
           console.error('Error fetching usage data:', usageError);
-        } else {
-          console.log('Usage data:', usageData);
+          navigate('/?subscription_required=true');
+          return;
         }
 
         if (usageData?.is_demo_user) {
@@ -65,53 +80,26 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
           return;
         }
 
-        // Verificar suscripción para usuarios normales
-        console.log('Checking subscription for normal user...');
-        const { data: subscription, error: subError } = await supabase
-          .from('subscribers')
-          .select('subscribed, subscription_tier, subscription_end')
-          .eq('user_id', user.id)
-          .single();
-
-        if (subError) {
-          console.error('Error checking subscription:', subError);
-          // Si hay error, intentar verificar con la función de check-subscription
-          try {
-            console.log('Attempting to refresh subscription status...');
-            const { data: refreshData, error: refreshError } = await supabase.functions.invoke('check-subscription', {
-              headers: {
-                Authorization: `Bearer ${session.access_token}`,
-              },
-            });
-            
-            if (refreshError) {
-              console.error('Error refreshing subscription:', refreshError);
-              navigate('/?subscription_required=true');
-              return;
-            }
-            
-            console.log('Refreshed subscription data:', refreshData);
-            if (refreshData?.subscribed) {
-              setHasAccess(true);
-            } else {
-              navigate('/?subscription_required=true');
-              return;
-            }
-          } catch (refreshError) {
-            console.error('Failed to refresh subscription:', refreshError);
-            navigate('/?subscription_required=true');
-            return;
-          }
+        // Si no es demo y no tiene suscripción local, verificar con Stripe (más lento)
+        console.log('No local subscription found, checking with Stripe...');
+        const { data: refreshData, error: refreshError } = await supabase.functions.invoke('check-subscription', {
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        });
+        
+        if (refreshError) {
+          console.error('Error refreshing subscription:', refreshError);
+          navigate('/?subscription_required=true');
+          return;
+        }
+        
+        console.log('Refreshed subscription data:', refreshData);
+        if (refreshData?.subscribed) {
+          setHasAccess(true);
         } else {
-          console.log('Subscription data:', subscription);
-          if (subscription?.subscribed) {
-            console.log('User has active subscription, granting access');
-            setHasAccess(true);
-          } else {
-            console.log('User has no active subscription, redirecting');
-            navigate('/?subscription_required=true');
-            return;
-          }
+          navigate('/?subscription_required=true');
+          return;
         }
       } catch (error) {
         console.error('Unexpected error checking access:', error);
