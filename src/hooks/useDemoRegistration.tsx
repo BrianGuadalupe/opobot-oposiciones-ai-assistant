@@ -55,8 +55,16 @@ export const useDemoRegistration = () => {
       if (!availability.canRegister) {
         toast({
           title: "Demo no disponible",
-          description: "Ya se ha registrado un usuario demo desde esta IP hoy. Inténtalo mañana.",
+          description: "Ya has realizado la demo gratuita. ¡Suscríbete para acceso completo a Opobot!",
           variant: "destructive",
+          action: (
+            <button 
+              onClick={() => window.location.href = '/#pricing'}
+              className="bg-white text-red-600 px-3 py-1 rounded text-sm hover:bg-gray-100"
+            >
+              Ver Planes
+            </button>
+          ),
         });
         return false;
       }
