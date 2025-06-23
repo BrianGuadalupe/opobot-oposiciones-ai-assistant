@@ -132,69 +132,15 @@ serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    // Inicializar Stripe con debug activado y timeout configuración
+    const stripe = new Stripe(stripeKey, { 
+      apiVersion: "2023-10-16",
+      timeout: 4000, // 4 segundos timeout directo en Stripe SDK
+    });
     
     let customerId = subscriberData?.stripe_customer_id;
     
-    // Si no tenemos customer_id en la DB, buscar por email (solo la primera vez)
-    if (!customerId) {
-      logStep("No stripe_customer_id found in DB, searching by email (first time setup)");
-      
-      // Timeout protection para consultas de Stripe
-      const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
-        });
-        
-        return Promise.race([promise, timeoutPromise]);
-      };
-
-      // Buscar customer con timeout de 3 segundos (solo cuando no está en DB)
-      const customers = await withTimeout(
-        stripe.customers.list({ 
-          email: user.email, 
-          limit: 1,
-        }),
-        3000
-      );
-      
-      if (customers.data.length === 0) {
-        logStep("No customer found in Stripe, updating unsubscribed state");
-        await supabaseClient.from("subscribers").upsert({
-          email: user.email,
-          user_id: user.id,
-          stripe_customer_id: null,
-          subscribed: false,
-          subscription_tier: null,
-          subscription_end: null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'email' });
-        
-        return new Response(JSON.stringify({ subscribed: false }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
-      }
-
-      customerId = customers.data[0].id;
-      logStep("Found Stripe customer by email, saving to DB", { customerId });
-      
-      // Guardar el customer_id en la DB para futuras consultas
-      await supabaseClient.from("subscribers").upsert({
-        email: user.email,
-        user_id: user.id,
-        stripe_customer_id: customerId,
-        subscribed: false, // Se actualizará después
-        subscription_tier: null,
-        subscription_end: null,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'email' });
-    } else {
-      logStep("Using stripe_customer_id from database", { customerId });
-    }
-
-    // OPTIMIZACIÓN: Usar directamente el customer_id para buscar suscripciones
-    logStep("Checking subscriptions with customer_id");
+    // Helper function para timeout manual adicional
     const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
@@ -203,15 +149,111 @@ serve(async (req) => {
       return Promise.race([promise, timeoutPromise]);
     };
 
-    // Buscar suscripciones activas con timeout de 3 segundos
-    const subscriptions = await withTimeout(
-      stripe.subscriptions.list({
-        customer: customerId,
-        status: "active",
-        limit: 1,
-      }),
-      3000
-    );
+    // Si no tenemos customer_id en la DB, buscar por email (solo la primera vez)
+    if (!customerId) {
+      logStep("No stripe_customer_id found in DB, searching by email (first time setup)");
+      
+      try {
+        // Buscar customer con timeout de 3 segundos (solo cuando no está en DB)
+        const customers = await withTimeout(
+          stripe.customers.list({ 
+            email: user.email, 
+            limit: 1,
+          }),
+          3000
+        );
+        
+        if (customers.data.length === 0) {
+          logStep("No customer found in Stripe, updating unsubscribed state");
+          await supabaseClient.from("subscribers").upsert({
+            email: user.email,
+            user_id: user.id,
+            stripe_customer_id: null,
+            subscribed: false,
+            subscription_tier: null,
+            subscription_end: null,
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'email' });
+          
+          return new Response(JSON.stringify({ subscribed: false }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+
+        customerId = customers.data[0].id;
+        logStep("Found Stripe customer by email, saving to DB", { customerId });
+        
+        // Guardar el customer_id en la DB para futuras consultas
+        await supabaseClient.from("subscribers").upsert({
+          email: user.email,
+          user_id: user.id,
+          stripe_customer_id: customerId,
+          subscribed: false, // Se actualizará después
+          subscription_tier: null,
+          subscription_end: null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'email' });
+      } catch (customerError) {
+        logStep("ERROR: Failed to fetch customer from Stripe", { error: customerError });
+        // Return early con estado no suscrito en caso de timeout del customer
+        return new Response(JSON.stringify({ 
+          subscribed: false,
+          error: "Customer lookup timeout"
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+    } else {
+      logStep("Using stripe_customer_id from database", { customerId });
+    }
+
+    // OPTIMIZACIÓN: Usar directamente el customer_id para buscar suscripciones
+    logStep("Checking subscriptions with customer_id");
+    
+    let subscriptions;
+    try {
+      // Buscar suscripciones activas con timeout de 3 segundos
+      subscriptions = await withTimeout(
+        stripe.subscriptions.list({
+          customer: customerId,
+          status: "active",
+          limit: 1,
+        }),
+        3000
+      );
+      
+      logStep("Stripe subscriptions.list completed successfully", { 
+        resultCount: subscriptions.data.length 
+      });
+      
+    } catch (subscriptionError) {
+      logStep("ERROR: Failed to fetch subscriptions from Stripe", { error: subscriptionError });
+      
+      // Return early con el estado actual en DB si Stripe falla
+      if (subscriberData) {
+        logStep("Returning cached subscription state due to Stripe timeout");
+        return new Response(JSON.stringify({
+          subscribed: subscriberData.subscribed || false,
+          subscription_tier: subscriberData.subscription_tier || null,
+          subscription_end: subscriberData.subscription_end || null,
+          cached: true
+        }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+      
+      // Si no hay datos cached, devolver no suscrito
+      return new Response(JSON.stringify({ 
+        subscribed: false,
+        error: "Subscription check timeout"
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
     
     const hasActiveSub = subscriptions.data.length > 0;
     let subscriptionTier = null;
@@ -222,22 +264,35 @@ serve(async (req) => {
       subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
       logStep("Active subscription found", { subscriptionId: subscription.id, endDate: subscriptionEnd });
       
-      const priceId = subscription.items.data[0].price.id;
-      const price = await withTimeout(stripe.prices.retrieve(priceId), 2000);
-      const amount = price.unit_amount || 0;
-      
-      // Map amounts to tiers securely
-      if (amount <= 1000) {
-        subscriptionTier = "Básico";
-      } else if (amount <= 2000) {
-        subscriptionTier = "Profesional";
-      } else {
-        subscriptionTier = "Academias";
+      try {
+        const priceId = subscription.items.data[0].price.id;
+        const price = await withTimeout(stripe.prices.retrieve(priceId), 2000);
+        const amount = price.unit_amount || 0;
+        
+        // Map amounts to tiers securely
+        if (amount <= 1000) {
+          subscriptionTier = "Básico";
+        } else if (amount <= 2000) {
+          subscriptionTier = "Profesional";
+        } else {
+          subscriptionTier = "Academias";
+        }
+        logStep("Determined subscription tier", { priceId, amount, subscriptionTier });
+      } catch (priceError) {
+        logStep("WARNING: Failed to fetch price details", { error: priceError });
+        subscriptionTier = "Desconocido";
       }
-      logStep("Determined subscription tier", { priceId, amount, subscriptionTier });
     } else {
       logStep("No active subscription found");
     }
+
+    // Log the final subscription data before return
+    const finalSubscriptionData = {
+      subscribed: hasActiveSub,
+      subscription_tier: subscriptionTier,
+      subscription_end: subscriptionEnd
+    };
+    logStep("Final subscription data to return", finalSubscriptionData);
 
     // Update database with validated data
     await supabaseClient.from("subscribers").upsert({
@@ -252,11 +307,7 @@ serve(async (req) => {
 
     logStep("Updated database with subscription info", { subscribed: hasActiveSub, subscriptionTier });
     
-    return new Response(JSON.stringify({
-      subscribed: hasActiveSub,
-      subscription_tier: subscriptionTier,
-      subscription_end: subscriptionEnd
-    }), {
+    return new Response(JSON.stringify(finalSubscriptionData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
@@ -264,7 +315,7 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : 'Internal server error';
     logStep("ERROR in check-subscription", { message: errorMessage });
     
-    // En caso de error, si dummy está habilitado, devolver respuesta dummy
+    // En caso de error general, si dummy está habilitado, devolver respuesta dummy
     if (ENABLE_DUMMY_RESPONSE && errorMessage.includes('timeout')) {
       logStep("Returning dummy response due to timeout error");
       return new Response(JSON.stringify(DUMMY_RESPONSE), {
