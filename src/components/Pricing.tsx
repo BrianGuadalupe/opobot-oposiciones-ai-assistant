@@ -6,11 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAuth } from "@/hooks/useAuth";
+import AcademyContactForm from "./AcademyContactForm";
 
 const Pricing = () => {
   const { user } = useAuth();
   const { subscribed, subscription_tier, redirectToStripeCheckout, openCustomerPortal } = useSubscription();
   const [isRedirecting, setIsRedirecting] = useState<string | null>(null);
+  const [showAcademyForm, setShowAcademyForm] = useState(false);
   
   // Frontend: Solo datos de presentación (no críticos)
   const plans = [
@@ -64,6 +66,12 @@ const Pricing = () => {
     console.log('Plan:', planName);
     console.log('User authenticated:', !!user);
     
+    // Si es el plan Academias, abrir formulario de contacto
+    if (planName === "Academias") {
+      setShowAcademyForm(true);
+      return;
+    }
+    
     if (!user) {
       console.log('Redirecting to auth for registration');
       window.location.href = '/auth?mode=register';
@@ -87,141 +95,149 @@ const Pricing = () => {
   };
 
   return (
-    <section id="pricing" className="py-20 hero-gradient rounded-xl shadow-inner">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
-          <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
-            Elige tu <span className="gradient-text">plan perfecto</span>
-          </h2>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Planes diseñados para adaptarse a tus necesidades, 
-            desde estudiantes individuales hasta academias completas
-          </p>
-          
-          {user && subscribed && (
-            <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg inline-block">
-              <p className="text-green-800 font-medium">
-                Plan actual: <span className="font-bold">{subscription_tier}</span>
-              </p>
-              <Button
-                onClick={openCustomerPortal}
-                variant="outline"
-                size="sm"
-                className="mt-2 text-green-700 border-green-300 hover:bg-green-100"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Gestionar Suscripción
-              </Button>
-            </div>
-          )}
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          {plans.map((plan, index) => {
-            const isCurrent = isCurrentPlan(plan.name);
-            const isLoading = isRedirecting === plan.name;
+    <>
+      <section id="pricing" className="py-20 hero-gradient rounded-xl shadow-inner">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4">
+              Elige tu <span className="gradient-text">plan perfecto</span>
+            </h2>
+            <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+              Planes diseñados para adaptarse a tus necesidades, 
+              desde estudiantes individuales hasta academias completas
+            </p>
             
-            return (
-              <Card 
-                key={index} 
-                className={`relative border-2 transition-all duration-300 hover:shadow-xl shadow-lg ${
-                  plan.popular 
-                    ? 'border-opobot-blue scale-105 z-10 shadow-xl ring-2 ring-opobot-blue/40' 
-                    : isCurrent
-                    ? 'border-green-500 bg-green-50/50'
-                    : 'border-gray-200 hover:border-opobot-blue bg-white/95'
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full pointer-events-none">
-                    <Badge
-                      className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-opobot-blue to-opobot-green text-white text-base font-semibold shadow-lg ring-2 ring-opobot-blue/20 border-0 animate-pulse select-none"
-                      style={{ boxShadow: "0 4px 24px 0 rgba(37,99,235,0.14)" }}
-                    >
-                      <Star className="w-5 h-5 text-yellow-400 drop-shadow" strokeWidth={2.4} fill="#fde047" />
-                      Más Popular
-                    </Badge>
-                  </div>
-                )}
+            {user && subscribed && (
+              <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg inline-block">
+                <p className="text-green-800 font-medium">
+                  Plan actual: <span className="font-bold">{subscription_tier}</span>
+                </p>
+                <Button
+                  onClick={openCustomerPortal}
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 text-green-700 border-green-300 hover:bg-green-100"
+                >
+                  <Settings className="w-4 h-4 mr-2" />
+                  Gestionar Suscripción
+                </Button>
+              </div>
+            )}
+          </div>
 
-                {isCurrent && (
-                  <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full pointer-events-none">
-                    <Badge className="bg-green-500 text-white text-sm font-semibold px-4 py-1">
-                      Tu Plan Actual
-                    </Badge>
-                  </div>
-                )}
-                
-                <CardHeader className="text-center pb-8">
-                  <CardTitle className="text-2xl font-bold text-gray-900 mb-2">
-                    {plan.name}
-                  </CardTitle>
-                  <p className="text-gray-600 mb-4">{plan.description}</p>
-                  <div className="flex items-center justify-center">
-                    <span className="text-4xl font-bold text-gray-900">€{plan.price}</span>
-                    <span className="text-gray-600 ml-2">/{plan.period}</span>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="pt-0">
-                  <ul className="space-y-4 mb-8">
-                    {plan.features.map((feature, featureIndex) => (
-                      <li key={featureIndex} className="flex items-center space-x-3">
-                        <CheckCircle className="w-5 h-5 text-opobot-green flex-shrink-0" />
-                        <span className="text-gray-700">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  
-                  {isCurrent ? (
-                    <Button 
-                      onClick={openCustomerPortal}
-                      variant="outline"
-                      className="w-full rounded-lg text-base shadow-sm border-green-300 text-green-700 hover:bg-green-50"
-                      size="lg"
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      Gestionar Plan
-                    </Button>
-                  ) : (
-                    <Button 
-                      onClick={() => handleSubscribe(plan.name)}
-                      disabled={isLoading}
-                      className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark disabled:opacity-50"
-                      size="lg"
-                    >
-                      {isLoading ? (
-                        <>
-                          <div className="w-4 h-4 mr-2 animate-spin border-2 border-white border-t-transparent rounded-full" />
-                          Redirigiendo...
-                        </>
-                      ) : (
-                        <>
-                          <ExternalLink className="w-4 h-4 mr-2" />
-                          {user ? 'Suscribirse' : 'Comenzar Gratis'}
-                        </>
-                      )}
-                    </Button>
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {plans.map((plan, index) => {
+              const isCurrent = isCurrentPlan(plan.name);
+              const isLoading = isRedirecting === plan.name;
+              const isAcademiasPlan = plan.name === "Academias";
+              
+              return (
+                <Card 
+                  key={index} 
+                  className={`relative border-2 transition-all duration-300 hover:shadow-xl shadow-lg ${
+                    plan.popular 
+                      ? 'border-opobot-blue scale-105 z-10 shadow-xl ring-2 ring-opobot-blue/40' 
+                      : isCurrent
+                      ? 'border-green-500 bg-green-50/50'
+                      : 'border-gray-200 hover:border-opobot-blue bg-white/95'
+                  }`}
+                >
+                  {plan.popular && (
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full pointer-events-none">
+                      <Badge
+                        className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-opobot-blue to-opobot-green text-white text-base font-semibold shadow-lg ring-2 ring-opobot-blue/20 border-0 animate-pulse select-none"
+                        style={{ boxShadow: "0 4px 24px 0 rgba(37,99,235,0.14)" }}
+                      >
+                        <Star className="w-5 h-5 text-yellow-400 drop-shadow" strokeWidth={2.4} fill="#fde047" />
+                        Más Popular
+                      </Badge>
+                    </div>
                   )}
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
 
-        <div className="text-center mt-12">
-          <Button
-            asChild
-            className="px-6 py-3 rounded-xl bg-opobot-blue hover:bg-opobot-blue-dark text-white text-base font-semibold shadow transition-all"
-            size="lg"
-          >
-            <a href="/auth?mode=register" tabIndex={-1}>
-              Contáctanos para un plan personalizado
-            </a>
-          </Button>
+                  {isCurrent && (
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 z-20 flex justify-center w-full pointer-events-none">
+                      <Badge className="bg-green-500 text-white text-sm font-semibold px-4 py-1">
+                        Tu Plan Actual
+                      </Badge>
+                    </div>
+                  )}
+                  
+                  <CardHeader className="text-center pb-8">
+                    <CardTitle className="text-2xl font-bold text-gray-900 mb-2">
+                      {plan.name}
+                    </CardTitle>
+                    <p className="text-gray-600 mb-4">{plan.description}</p>
+                    <div className="flex items-center justify-center">
+                      <span className="text-4xl font-bold text-gray-900">€{plan.price}</span>
+                      <span className="text-gray-600 ml-2">/{plan.period}</span>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="pt-0">
+                    <ul className="space-y-4 mb-8">
+                      {plan.features.map((feature, featureIndex) => (
+                        <li key={featureIndex} className="flex items-center space-x-3">
+                          <CheckCircle className="w-5 h-5 text-opobot-green flex-shrink-0" />
+                          <span className="text-gray-700">{feature}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    
+                    {isCurrent ? (
+                      <Button 
+                        onClick={openCustomerPortal}
+                        variant="outline"
+                        className="w-full rounded-lg text-base shadow-sm border-green-300 text-green-700 hover:bg-green-50"
+                        size="lg"
+                      >
+                        <Settings className="w-4 h-4 mr-2" />
+                        Gestionar Plan
+                      </Button>
+                    ) : (
+                      <Button 
+                        onClick={() => handleSubscribe(plan.name)}
+                        disabled={isLoading}
+                        className="w-full rounded-lg text-base shadow-sm bg-opobot-blue hover:bg-opobot-blue-dark disabled:opacity-50"
+                        size="lg"
+                      >
+                        {isLoading ? (
+                          <>
+                            <div className="w-4 h-4 mr-2 animate-spin border-2 border-white border-t-transparent rounded-full" />
+                            Redirigiendo...
+                          </>
+                        ) : (
+                          <>
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                            {isAcademiasPlan ? 'Solicitar Información' : (user ? 'Suscribirse' : 'Comenzar Gratis')}
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <div className="text-center mt-12">
+            <Button
+              asChild
+              className="px-6 py-3 rounded-xl bg-opobot-blue hover:bg-opobot-blue-dark text-white text-base font-semibold shadow transition-all"
+              size="lg"
+            >
+              <a href="/auth?mode=register" tabIndex={-1}>
+                Contáctanos para un plan personalizado
+              </a>
+            </Button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+      
+      <AcademyContactForm 
+        open={showAcademyForm} 
+        onOpenChange={setShowAcademyForm} 
+      />
+    </>
   );
 };
 

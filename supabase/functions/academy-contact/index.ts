@@ -11,9 +11,10 @@ const corsHeaders = {
 
 interface AcademyContactRequest {
   academyName: string;
-  studentCount: string;
   email: string;
   phone: string;
+  studentCount: string;
+  city: string;
 }
 
 serve(async (req: Request) => {
@@ -25,24 +26,26 @@ serve(async (req: Request) => {
     const body = await req.json() as AcademyContactRequest;
 
     const html = `
-      <h2>Nuevo contacto de Academia</h2>
+      <h2>Nueva solicitud de información - Plan Academias</h2>
       <p><b>Nombre de la academia:</b> ${body.academyName}</p>
-      <p><b>Estudiantes:</b> ${body.studentCount}</p>
       <p><b>Email:</b> ${body.email}</p>
       <p><b>Teléfono:</b> ${body.phone}</p>
+      <p><b>Número de alumnos:</b> ${body.studentCount}</p>
+      <p><b>Ciudad:</b> ${body.city}</p>
+      <p><em>Un representante debe contactar a esta academia lo antes posible para mostrar las posibilidades de Opobot e iniciar la integración.</em></p>
     `;
 
     const emailResponse = await resend.emails.send({
-      from: "Opobot Landing <onboarding@resend.dev>",
+      from: "Opobot Academias <onboarding@resend.dev>",
       to: ["opobot.info@gmail.com"],
-      subject: "Solicitud de información (Academias) - Opobot",
+      subject: "Nueva solicitud de información - Plan Academias",
       html,
       reply_to: body.email,
     });
 
-    console.log("Academy contact sent:", emailResponse);
+    console.log("Academy contact email sent:", emailResponse);
 
-    return new Response(JSON.stringify({ ok: true }), {
+    return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (error: any) {
