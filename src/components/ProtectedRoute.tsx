@@ -1,7 +1,9 @@
 
+import { useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { Navigate } from "react-router-dom";
+import SubscriptionRequiredModal from "./SubscriptionRequiredModal";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -11,6 +13,7 @@ interface ProtectedRouteProps {
 const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRouteProps) => {
   const { user, loading: authLoading } = useAuth();
   const { subscribed, loading: subscriptionLoading } = useSubscription();
+  const [showModal, setShowModal] = useState(false);
 
   console.log('=== PROTECTED ROUTE ===');
   console.log('User exists:', !!user);
@@ -55,8 +58,30 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
 
   // Si se requiere suscripción pero el usuario no está suscrito (después de cargar)
   if (requireSubscription && !subscriptionLoading && !subscribed) {
-    console.log('❌ Subscription required but user not subscribed, redirecting to home with subscription required');
-    return <Navigate to="/?subscription_required=true" replace />;
+    console.log('❌ Subscription required but user not subscribed, showing modal');
+    
+    // Mostrar el modal si no se ha mostrado ya
+    if (!showModal) {
+      setShowModal(true);
+    }
+    
+    return (
+      <>
+        <SubscriptionRequiredModal 
+          isOpen={showModal} 
+          onClose={() => setShowModal(false)} 
+        />
+        {/* Renderizar contenido de fondo mientras se muestra el modal */}
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="text-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-opobot-blue to-opobot-green rounded-lg flex items-center justify-center mx-auto mb-4">
+              <span className="text-white font-bold">O</span>
+            </div>
+            <p>Verificando acceso...</p>
+          </div>
+        </div>
+      </>
+    );
   }
 
   console.log('✅ Access granted to protected route');
