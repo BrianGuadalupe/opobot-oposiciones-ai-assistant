@@ -30,8 +30,8 @@ const validateInput = (input: any): string | null => {
   return null;
 };
 
-// DUMMY RESPONSE TEMPORAL PARA TESTING
-const ENABLE_DUMMY_RESPONSE = true;
+// DUMMY RESPONSE TEMPORAL PARA TESTING - DESHABILITAR EN PRODUCCIÓN
+const ENABLE_DUMMY_RESPONSE = false;
 const DUMMY_RESPONSE = {
   subscribed: true,
   subscription_tier: "Profesional",
@@ -124,12 +124,77 @@ serve(async (req) => {
       });
     }
 
-    // CÓDIGO REAL DE STRIPE (solo si dummy está deshabilitado)
+    // OPTIMIZACIÓN: Buscar el stripe_customer_id desde la base de datos primero
+    logStep("Looking up subscriber record in database");
+    const { data: subscriberData, error: subscriberError } = await supabaseClient
+      .from('subscribers')
+      .select('stripe_customer_id, subscribed, subscription_tier, subscription_end')
+      .eq('user_id', user.id)
+      .single();
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
     
-    logStep("Starting Stripe customer lookup with timeout protection");
+    let customerId = subscriberData?.stripe_customer_id;
     
-    // Timeout protection para consultas de Stripe
+    // Si no tenemos customer_id en la DB, buscar por email (solo la primera vez)
+    if (!customerId) {
+      logStep("No stripe_customer_id found in DB, searching by email (first time setup)");
+      
+      // Timeout protection para consultas de Stripe
+      const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
+        });
+        
+        return Promise.race([promise, timeoutPromise]);
+      };
+
+      // Buscar customer con timeout de 3 segundos (solo cuando no está en DB)
+      const customers = await withTimeout(
+        stripe.customers.list({ 
+          email: user.email, 
+          limit: 1,
+        }),
+        3000
+      );
+      
+      if (customers.data.length === 0) {
+        logStep("No customer found in Stripe, updating unsubscribed state");
+        await supabaseClient.from("subscribers").upsert({
+          email: user.email,
+          user_id: user.id,
+          stripe_customer_id: null,
+          subscribed: false,
+          subscription_tier: null,
+          subscription_end: null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'email' });
+        
+        return new Response(JSON.stringify({ subscribed: false }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      customerId = customers.data[0].id;
+      logStep("Found Stripe customer by email, saving to DB", { customerId });
+      
+      // Guardar el customer_id en la DB para futuras consultas
+      await supabaseClient.from("subscribers").upsert({
+        email: user.email,
+        user_id: user.id,
+        stripe_customer_id: customerId,
+        subscribed: false, // Se actualizará después
+        subscription_tier: null,
+        subscription_end: null,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'email' });
+    } else {
+      logStep("Using stripe_customer_id from database", { customerId });
+    }
+
+    // OPTIMIZACIÓN: Usar directamente el customer_id para buscar suscripciones
+    logStep("Checking subscriptions with customer_id");
     const withTimeout = async <T>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
       const timeoutPromise = new Promise<never>((_, reject) => {
         setTimeout(() => reject(new Error(`Operation timeout after ${timeoutMs}ms`)), timeoutMs);
@@ -137,37 +202,6 @@ serve(async (req) => {
       
       return Promise.race([promise, timeoutPromise]);
     };
-
-    // Buscar customer con timeout de 3 segundos
-    const customers = await withTimeout(
-      stripe.customers.list({ 
-        email: user.email, 
-        limit: 1,
-        expand: ['data.subscriptions']
-      }),
-      3000
-    );
-    
-    if (customers.data.length === 0) {
-      logStep("No customer found, updating unsubscribed state");
-      await supabaseClient.from("subscribers").upsert({
-        email: user.email,
-        user_id: user.id,
-        stripe_customer_id: null,
-        subscribed: false,
-        subscription_tier: null,
-        subscription_end: null,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'email' });
-      
-      return new Response(JSON.stringify({ subscribed: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 200,
-      });
-    }
-
-    const customerId = customers.data[0].id;
-    logStep("Found Stripe customer", { customerId });
 
     // Buscar suscripciones activas con timeout de 3 segundos
     const subscriptions = await withTimeout(
