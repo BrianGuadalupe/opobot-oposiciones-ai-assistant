@@ -220,10 +220,49 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      console.log('🔄 Starting logout process...');
+      
+      // Clear local state first
+      setUser(null);
+      setSession(null);
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('❌ Logout error:', error);
+        toast({
+          title: "Error al cerrar sesión",
+          description: "Hubo un problema al cerrar sesión. Inténtalo de nuevo.",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      console.log('✅ Logout successful');
+      
+      // Clear any remaining auth data
+      localStorage.removeItem('supabase.auth.token');
+      
+      // Show success message
+      toast({
+        title: "Sesión cerrada",
+        description: "Has cerrado sesión correctamente.",
+        variant: "default",
+      });
+      
+      // Redirect to home page
+      window.location.href = '/';
+      
     } catch (error) {
-      console.error('Signout error:', error);
+      console.error('❌ Unexpected logout error:', error);
       handleSecureError(error, 'Error al cerrar sesión');
+      
+      // Force clear state and redirect even if there's an error
+      setUser(null);
+      setSession(null);
+      localStorage.removeItem('supabase.auth.token');
+      window.location.href = '/';
     }
   };
 

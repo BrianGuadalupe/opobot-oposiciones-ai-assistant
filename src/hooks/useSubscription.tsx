@@ -2,9 +2,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
-import { checkSubscriptionStatus, createStripeCheckout } from '@/utils/subscriptionApi';
+import { checkSubscriptionStatus, createStripeCheckout, openStripeCustomerPortal } from '@/utils/subscriptionApi';
 import { supabase } from '@/integrations/supabase/client';
 import type { SubscriptionStatus } from '@/types/subscription';
+import { toast } from '@/hooks/use-toast';
 
 export const useSubscription = () => {
   const { user, session } = useAuth();
@@ -144,27 +145,40 @@ export const useSubscription = () => {
     }
   };
 
-  // Customer portal
+  // Customer portal mejorado
   const openCustomerPortal = async () => {
+    console.log('=== CUSTOMER PORTAL START ===');
+    console.log('User:', !!user);
+    console.log('Session:', !!session?.access_token);
+    
     if (!user || !session?.access_token) {
-      console.log('No user session for customer portal');
+      console.log('❌ No user session for customer portal');
+      toast({
+        title: "Error",
+        description: "Debes iniciar sesión para gestionar tu suscripción",
+        variant: "destructive",
+      });
       return;
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('customer-portal', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json',
-        },
+      console.log('🔄 Opening customer portal...');
+      
+      const url = await openStripeCustomerPortal(session.access_token);
+      
+      console.log('✅ Customer portal URL received:', url);
+      
+      // Abrir en nueva pestaña
+      window.open(url, '_blank', 'noopener,noreferrer');
+      
+      toast({
+        title: "Portal de gestión",
+        description: "Se ha abierto el portal de gestión de Stripe en una nueva pestaña",
+        variant: "default",
       });
-
-      if (error) throw error;
-      if (data?.url) {
-        window.open(data.url, '_blank', 'noopener,noreferrer');
-      }
+      
     } catch (error) {
-      console.error('Error opening customer portal:', error);
+      console.error('❌ Error opening customer portal:', error);
       handleSecureError(error, 'No se pudo abrir el portal de gestión');
     }
   };

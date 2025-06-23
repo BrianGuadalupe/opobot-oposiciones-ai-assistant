@@ -23,11 +23,12 @@ const Index = () => {
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
 
-  // Check if the user is not authenticated and redirect to /auth
+  // Solo redirigir a /auth si el usuario intenta acceder a una ruta protegida
+  // La landing page debe ser accesible para todos
   useEffect(() => {
-    if (!user && !localStorage.getItem('supabase.auth.token')) {
-      window.location.href = '/auth';
-    }
+    // No redirigir automáticamente desde la landing page
+    // Los usuarios no autenticados pueden ver la landing
+    console.log('Landing page loaded - User authenticated:', !!user);
   }, [user]);
 
   // Display a toast message if the user has exceeded their query limits
@@ -80,7 +81,7 @@ const Index = () => {
       <Pricing />
       <Testimonials />
       
-      {/* Debug Panel - TEMPORAL PARA DEBUGGING */}
+      {/* Debug Panel - Solo mostrar si el usuario está autenticado */}
       {user && (
         <div className="container mx-auto px-4 py-8">
           <SubscriptionDebugPanel />
