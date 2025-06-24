@@ -25,7 +25,7 @@ export const useChat = () => {
 
   const sendMessage = async (content: string) => {
     console.log('=== CHAT SEND MESSAGE START ===');
-    console.log('📝 Content:', content);
+    console.log('📝 Content:', content.substring(0, 100) + '...');
     console.log('👤 Session exists:', !!session);
     console.log('🔄 Subscription ready:', subscriptionReady);
     console.log('🔄 Subscription loading:', subscriptionLoading);
@@ -56,9 +56,11 @@ export const useChat = () => {
       setIsLoading(true);
       console.log('⏳ About to call checkQueryLimit...');
       
+      const limitCheckStart = Date.now();
       const limitCheck = await checkQueryLimit();
+      const limitCheckDuration = Date.now() - limitCheckStart;
       
-      console.log('✅ checkQueryLimit completed successfully');
+      console.log('✅ checkQueryLimit completed in', limitCheckDuration, 'ms');
       console.log('📊 Limit check result:', JSON.stringify(limitCheck, null, 2));
       
       if (!limitCheck) {
@@ -104,6 +106,8 @@ export const useChat = () => {
       console.log('🤖 About to call chat-opobot function...');
       console.log('📚 Conversation history length:', conversationHistory.length);
       
+      const chatStart = Date.now();
+      
       const { data, error } = await supabase.functions.invoke('chat-opobot', {
         body: {
           message: content,
@@ -114,7 +118,8 @@ export const useChat = () => {
         },
       });
 
-      console.log('✅ Chat-opobot response received');
+      const chatDuration = Date.now() - chatStart;
+      console.log('✅ Chat-opobot response received in', chatDuration, 'ms');
       console.log('📥 Response data:', data);
       console.log('❌ Response error:', error);
 
@@ -148,8 +153,12 @@ export const useChat = () => {
       setMessages(prev => [...prev, assistantMessage]);
 
       console.log('📊 Logging query with useQueryLimits...');
+      const logStart = Date.now();
+      
       await logQuery(content, data.message.length);
-      console.log('✅ Query logged successfully');
+      
+      const logDuration = Date.now() - logStart;
+      console.log('✅ Query logged successfully in', logDuration, 'ms');
 
     } catch (error) {
       console.error('💥 Error in chat flow:', error);
