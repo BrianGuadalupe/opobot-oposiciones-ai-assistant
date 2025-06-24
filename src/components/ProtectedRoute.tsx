@@ -11,45 +11,47 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRouteProps) => {
   const { user, session } = useAuth();
-  const { subscribed, loading: subscriptionLoading, checkSubscription } = useSubscription();
+  const { subscribed, loading: subscriptionLoading, isReady, checkSubscription } = useSubscription();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
   const [hasAccess, setHasAccess] = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(true);
 
   useEffect(() => {
-    const checkAccess = async () => {
-      console.log('=== PROTECTED ROUTE CHECK ACCESS ===');
+    const evaluateAccess = async () => {
+      console.log('=== PROTECTED ROUTE EVALUATION ===');
       console.log('User:', !!user);
       console.log('Session:', !!session);
       console.log('Require subscription:', requireSubscription);
       console.log('Subscribed:', subscribed);
       console.log('Subscription loading:', subscriptionLoading);
+      console.log('Subscription ready:', isReady);
 
-      // If no user or session, redirect to auth
+      // Si no hay usuario o sesión, redirigir a auth
       if (!user || !session) {
         console.log('No user or session, redirecting to auth');
         navigate('/auth');
         return;
       }
 
-      // If subscription is not required, grant access immediately
+      // Si no requiere suscripción, dar acceso inmediato
       if (!requireSubscription) {
         console.log('No subscription required, granting access');
         setHasAccess(true);
-        setIsLoading(false);
+        setIsEvaluating(false);
         return;
       }
 
-      // Wait for subscription loading to complete
-      if (subscriptionLoading) {
-        console.log('Subscription still loading, waiting...');
+      // CLAVE: Solo evaluar cuando la suscripción esté lista
+      if (!isReady) {
+        console.log('Subscription not ready yet, waiting...');
+        setIsEvaluating(true);
         return;
       }
 
-      console.log('✅ Ready to evaluate subscription access');
+      console.log('✅ Subscription ready, evaluating access');
       console.log('✅ Final subscribed value:', subscribed);
 
-      // Check subscription status
+      // Evaluar estado de suscripción
       if (subscribed) {
         console.log('User is subscribed, granting access');
         setHasAccess(true);
@@ -84,14 +86,14 @@ const ProtectedRoute = ({ children, requireSubscription = false }: ProtectedRout
         }
       }
 
-      setIsLoading(false);
+      setIsEvaluating(false);
     };
 
-    checkAccess();
-  }, [user, session, navigate, requireSubscription, subscribed, subscriptionLoading]);
+    evaluateAccess();
+  }, [user, session, navigate, requireSubscription, subscribed, isReady]);
 
-  // Show loading while evaluating access
-  if (isLoading || subscriptionLoading) {
+  // Show loading while evaluating access or subscription not ready
+  if (isEvaluating || !isReady) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-opobot-blue"></div>
