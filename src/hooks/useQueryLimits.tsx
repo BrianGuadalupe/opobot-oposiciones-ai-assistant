@@ -43,12 +43,20 @@ export const useQueryLimits = () => {
       console.log('🔍 About to invoke manage-usage function for check_limit...');
       console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
       
-      const { data, error } = await supabase.functions.invoke('manage-usage', {
+      // Add timeout to the manage-usage call
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('manage-usage timeout after 10 seconds')), 10000);
+      });
+      
+      const callPromise = supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
+
+      console.log('⏳ Starting manage-usage call with 10s timeout...');
+      const { data, error } = await Promise.race([callPromise, timeoutPromise]) as any;
 
       console.log('📥 Manage-usage response received');
       console.log('📥 Response error:', error);
@@ -139,6 +147,16 @@ export const useQueryLimits = () => {
       console.error('💥 Error checking query limit:', error);
       console.error('💥 Error message:', error?.message);
       console.error('💥 Error stack:', error?.stack);
+      
+      if (error?.message?.includes('timeout')) {
+        console.error('⏰ TIMEOUT ERROR - manage-usage took too long');
+        toast({
+          title: "Error de Tiempo",
+          description: "La verificación de límites tardó demasiado. Intenta de nuevo.",
+          variant: "destructive",
+        });
+      }
+      
       return {
         canProceed: false,
         reason: 'error',

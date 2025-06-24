@@ -125,7 +125,12 @@ export const useChat = () => {
 
       console.log('🤖 About to call chat-opobot function...');
       
-      const { data, error } = await supabase.functions.invoke('chat-opobot', {
+      // Add timeout to chat-opobot call
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('chat-opobot timeout after 30 seconds')), 30000);
+      });
+      
+      const chatPromise = supabase.functions.invoke('chat-opobot', {
         body: {
           message: content,
           conversationHistory
@@ -134,6 +139,9 @@ export const useChat = () => {
           Authorization: `Bearer ${session.access_token}`,
         },
       });
+
+      console.log('⏳ Starting chat-opobot call with 30s timeout...');
+      const { data, error } = await Promise.race([chatPromise, timeoutPromise]) as any;
 
       console.log('✅ Chat-opobot response received');
 
@@ -163,11 +171,20 @@ export const useChat = () => {
     } catch (error) {
       console.error('💥 Error in chat flow:', error);
       
-      toast({
-        title: "Error",
-        description: "No se pudo enviar el mensaje. Inténtalo de nuevo.",
-        variant: "destructive",
-      });
+      if (error?.message?.includes('timeout')) {
+        console.error('⏰ TIMEOUT ERROR - chat took too long');
+        toast({
+          title: "Error de Tiempo",
+          description: "El chat tardó demasiado en responder. Intenta de nuevo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+          variant: "destructive",
+        });
+      }
 
       // Remover el mensaje del usuario en caso de error
       setMessages(prev => prev.slice(0, -1));
