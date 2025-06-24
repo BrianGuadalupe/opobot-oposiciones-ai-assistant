@@ -7,6 +7,29 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Utility function to add timeout to any promise
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(timeoutMessage)), timeoutMs)
+    )
+  ]);
+}
+
+// Utility function to safely execute database operations
+async function safeDbOperation<T>(operation: () => Promise<T>, operationName: string, timeoutMs = 5000): Promise<T | null> {
+  try {
+    console.log(`🔄 Starting ${operationName}...`);
+    const result = await withTimeout(operation(), timeoutMs, `${operationName} timeout after ${timeoutMs}ms`);
+    console.log(`✅ ${operationName} completed successfully`);
+    return result;
+  } catch (error) {
+    console.error(`❌ ${operationName} failed:`, error.message);
+    return null;
+  }
+}
+
 serve(async (req) => {
   console.log('🚀 MANAGE-USAGE Function started');
   console.log('📋 Request method:', req.method);
@@ -20,7 +43,11 @@ serve(async (req) => {
   
   try {
     console.log('📥 Reading request body...');
-    const requestBody = await req.json();
+    const requestBody = await withTimeout(
+      req.json(), 
+      2000, 
+      "Request body parsing timeout"
+    );
     console.log('📦 Request body received:', { action: requestBody.action });
     
     const { action, queryText, responseLength, userIp } = requestBody;
@@ -48,11 +75,14 @@ serve(async (req) => {
     const token = authHeader.replace("Bearer ", "");
     console.log('⏳ Calling supabase.auth.getUser...');
     
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    console.log('✅ User auth check completed');
+    const userResult = await safeDbOperation(
+      () => supabaseClient.auth.getUser(token),
+      "User authentication",
+      3000
+    );
     
-    if (userError || !userData.user?.email) {
-      console.log('❌ User authentication failed:', userError?.message || 'No user email');
+    if (!userResult || userResult.error || !userResult.data?.user?.email) {
+      console.log('❌ User authentication failed:', userResult?.error?.message || 'No user email');
       return new Response(JSON.stringify({ 
         error: "User authentication failed" 
       }), {
@@ -61,10 +91,10 @@ serve(async (req) => {
       });
     }
 
-    const user = userData.user;
+    const user = userResult.data.user;
     console.log('👤 Authenticated user:', user.id);
 
-    // Handle different actions with early returns to avoid hanging
+    // Handle different actions with early returns and timeouts
     if (action === "check_demo_availability") {
       console.log('🔍 Processing check_demo_availability...');
       return await handleCheckDemoAvailability(supabaseClient, userIp, user.email);
@@ -117,26 +147,53 @@ serve(async (req) => {
 async function handleCheckDemoAvailability(supabase: any, userIp: string, email: string) {
   try {
     console.log('🔍 Checking demo availability...');
-    console.log('⏳ Calling can_register_demo RPC...');
     
-    const { data: canRegister } = await supabase.rpc('can_register_demo', { 
-      check_ip: userIp,
-      check_email: email
-    });
+    const canRegisterResult = await safeDbOperation(
+      () => supabase.rpc('can_register_demo', { 
+        check_ip: userIp,
+        check_email: email
+      }),
+      "Demo availability check",
+      3000
+    );
     
+    if (canRegisterResult === null) {
+      console.log('❌ Demo availability check failed');
+      return new Response(JSON.stringify({ 
+        canRegister: false, 
+        reason: 'error' 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    const canRegister = canRegisterResult.data;
     console.log('✅ Demo availability check completed:', canRegister);
     
     if (!canRegister) {
       console.log('🔍 Checking specific reason for demo unavailability...');
-      const { data: emailDemo } = await supabase
-        .from("demo_registrations")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
+      const emailDemoResult = await safeDbOperation(
+        () => supabase
+          .from("demo_registrations")
+          .select("id")
+          .eq("email", email)
+          .maybeSingle(),
+        "Email demo check",
+        2000
+      );
 
-      console.log('📊 Email demo check result:', !!emailDemo);
+      if (emailDemoResult === null) {
+        return new Response(JSON.stringify({ 
+          canRegister: false, 
+          reason: 'error' 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
       
-      if (emailDemo) {
+      if (emailDemoResult.data) {
         console.log('📧 Email already used for demo');
         return new Response(JSON.stringify({ 
           canRegister: false, 
@@ -161,7 +218,10 @@ async function handleCheckDemoAvailability(supabase: any, userIp: string, email:
     });
   } catch (error) {
     console.error('💥 Error in handleCheckDemoAvailability:', error);
-    return new Response(JSON.stringify({ error: "Demo availability check failed" }), {
+    return new Response(JSON.stringify({ 
+      canRegister: false, 
+      reason: 'error' 
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -171,24 +231,41 @@ async function handleCheckDemoAvailability(supabase: any, userIp: string, email:
 async function handleRegisterDemo(supabase: any, userIp: string, user: any) {
   try {
     console.log('📝 Registering demo user...');
-    console.log('⏳ Re-checking demo availability...');
     
-    const { data: canRegister } = await supabase.rpc('can_register_demo', { 
-      check_ip: userIp,
-      check_email: user.email
-    });
+    const canRegisterResult = await safeDbOperation(
+      () => supabase.rpc('can_register_demo', { 
+        check_ip: userIp,
+        check_email: user.email
+      }),
+      "Demo re-check",
+      3000
+    );
     
+    if (canRegisterResult === null) {
+      return new Response(JSON.stringify({ 
+        error: "Demo registration check failed" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    const canRegister = canRegisterResult.data;
     console.log('✅ Demo re-check completed:', canRegister);
     
     if (!canRegister) {
       console.log('❌ Demo registration no longer available');
-      const { data: emailDemo } = await supabase
-        .from("demo_registrations")
-        .select("id")
-        .eq("email", user.email)
-        .maybeSingle();
+      const emailDemoResult = await safeDbOperation(
+        () => supabase
+          .from("demo_registrations")
+          .select("id")
+          .eq("email", user.email)
+          .maybeSingle(),
+        "Email demo verification",
+        2000
+      );
 
-      if (emailDemo) {
+      if (emailDemoResult?.data) {
         console.log('📧 Email already has demo registered');
         return new Response(JSON.stringify({ 
           error: "Email already has demo registered" 
@@ -208,27 +285,53 @@ async function handleRegisterDemo(supabase: any, userIp: string, user: any) {
     }
 
     console.log('⏳ Inserting demo registration...');
-    await supabase
-      .from("demo_registrations")
-      .insert({
-        user_id: user.id,
-        email: user.email,
-        ip_address: userIp
+    const demoInsertResult = await safeDbOperation(
+      () => supabase
+        .from("demo_registrations")
+        .insert({
+          user_id: user.id,
+          email: user.email,
+          ip_address: userIp
+        }),
+      "Demo registration insert",
+      3000
+    );
+
+    if (demoInsertResult === null) {
+      return new Response(JSON.stringify({ 
+        error: "Demo registration failed" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
 
     console.log('⏳ Creating user usage record...');
-    await supabase
-      .from("user_usage")
-      .insert({
-        user_id: user.id,
-        email: user.email,
-        is_active: true,
-        is_demo_user: true,
-        subscription_tier: "Demo",
-        queries_remaining_this_month: 3,
-        current_period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-        current_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString()
+    const usageInsertResult = await safeDbOperation(
+      () => supabase
+        .from("user_usage")
+        .insert({
+          user_id: user.id,
+          email: user.email,
+          is_active: true,
+          is_demo_user: true,
+          subscription_tier: "Demo",
+          queries_remaining_this_month: 3,
+          current_period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+          current_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString()
+        }),
+      "Usage record insert",
+      3000
+    );
+
+    if (usageInsertResult === null) {
+      return new Response(JSON.stringify({ 
+        error: "Usage record creation failed" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
 
     console.log('✅ Demo registration completed successfully');
     return new Response(JSON.stringify({ success: true }), {
@@ -236,7 +339,9 @@ async function handleRegisterDemo(supabase: any, userIp: string, user: any) {
     });
   } catch (error) {
     console.error('💥 Error in handleRegisterDemo:', error);
-    return new Response(JSON.stringify({ error: "Demo registration failed" }), {
+    return new Response(JSON.stringify({ 
+      error: "Demo registration failed" 
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -248,12 +353,29 @@ async function handleCheckLimit(supabase: any, userId: string, email: string) {
   
   try {
     console.log('⏳ handleCheckLimit - Fetching user usage...');
-    const { data: usage, error: usageError } = await supabase
-      .from("user_usage")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const usageResult = await safeDbOperation(
+      () => supabase
+        .from("user_usage")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      "User usage fetch",
+      4000
+    );
 
+    if (usageResult === null) {
+      console.error('❌ Error fetching usage - operation failed');
+      return new Response(JSON.stringify({
+        canProceed: false,
+        reason: "error",
+        message: "Error al verificar límite de consultas"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: usage, error: usageError } = usageResult;
     console.log('✅ handleCheckLimit - User usage fetched');
 
     if (usageError) {
@@ -263,6 +385,7 @@ async function handleCheckLimit(supabase: any, userId: string, email: string) {
         reason: "error",
         message: "Error al verificar límite de consultas"
       }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -321,12 +444,29 @@ async function handleCheckLimit(supabase: any, userId: string, email: string) {
 
     // Para usuarios con suscripción
     console.log('⏳ handleCheckLimit - Fetching subscriber info...');
-    const { data: subscriber, error: subError } = await supabase
-      .from("subscribers")
-      .select("subscribed, subscription_tier")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const subscriberResult = await safeDbOperation(
+      () => supabase
+        .from("subscribers")
+        .select("subscribed, subscription_tier")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      "Subscriber info fetch",
+      3000
+    );
 
+    if (subscriberResult === null) {
+      console.error('❌ Error fetching subscriber - operation failed');
+      return new Response(JSON.stringify({
+        canProceed: false,
+        reason: "error",
+        message: "Error al verificar suscripción"
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: subscriber, error: subError } = subscriberResult;
     console.log('✅ handleCheckLimit - Subscriber info fetched');
 
     if (subError) {
@@ -336,6 +476,7 @@ async function handleCheckLimit(supabase: any, userId: string, email: string) {
         reason: "error",
         message: "Error al verificar suscripción"
       }), {
+        status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -361,22 +502,26 @@ async function handleCheckLimit(supabase: any, userId: string, email: string) {
     
     if (usageMonth !== currentMonth) {
       console.log('🔄 handleCheckLimit - Resetting usage for new month');
-      const { data: updatedUsage } = await supabase
-        .from("user_usage")
-        .update({
-          queries_this_month: 0,
-          queries_remaining_this_month: monthlyLimit,
-          usage_percentage: 0,
-          subscription_tier: subscriptionTier,
-          current_period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
-          current_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString()
-        })
-        .eq("user_id", userId)
-        .select()
-        .maybeSingle();
+      const updateResult = await safeDbOperation(
+        () => supabase
+          .from("user_usage")
+          .update({
+            queries_this_month: 0,
+            queries_remaining_this_month: monthlyLimit,
+            usage_percentage: 0,
+            subscription_tier: subscriptionTier,
+            current_period_start: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString(),
+            current_period_end: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString()
+          })
+          .eq("user_id", userId)
+          .select()
+          .maybeSingle(),
+        "Usage reset",
+        3000
+      );
       
-      if (updatedUsage) {
-        currentUsage = updatedUsage;
+      if (updateResult?.data) {
+        currentUsage = updateResult.data;
       }
       console.log('✅ handleCheckLimit - Usage reset completed');
     }
@@ -439,23 +584,41 @@ async function handleLogQuery(supabase: any, userId: string, email: string, quer
     const currentMonth = new Date().toISOString().slice(0, 7);
     
     console.log('⏳ handleLogQuery - Inserting query log...');
-    await supabase
-      .from("query_logs")
-      .insert({
-        user_id: userId,
-        query_text: queryText?.substring(0, 500) || '',
-        response_length: responseLength || 0,
-        month_year: currentMonth
+    const logInsertResult = await safeDbOperation(
+      () => supabase
+        .from("query_logs")
+        .insert({
+          user_id: userId,
+          query_text: queryText?.substring(0, 500) || '',
+          response_length: responseLength || 0,
+          month_year: currentMonth
+        }),
+      "Query log insert",
+      3000
+    );
+
+    if (logInsertResult === null) {
+      return new Response(JSON.stringify({ 
+        error: "Query logging failed" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
 
     console.log('⏳ handleLogQuery - Fetching current usage...');
-    const { data: currentUsage } = await supabase
-      .from("user_usage")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const usageResult = await safeDbOperation(
+      () => supabase
+        .from("user_usage")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      "Usage fetch for update",
+      3000
+    );
 
-    if (currentUsage) {
+    if (usageResult?.data) {
+      const currentUsage = usageResult.data;
       const newQueriesThisMonth = currentUsage.queries_this_month + 1;
       const newTotalQueries = currentUsage.total_queries + 1;
       
@@ -470,15 +633,23 @@ async function handleLogQuery(supabase: any, userId: string, email: string, quer
       const newUsagePercentage = (newQueriesThisMonth / monthlyLimit) * 100;
       
       console.log('⏳ handleLogQuery - Updating usage statistics...');
-      await supabase
-        .from("user_usage")
-        .update({
-          queries_this_month: newQueriesThisMonth,
-          queries_remaining_this_month: newQueriesRemaining,
-          usage_percentage: newUsagePercentage,
-          total_queries: newTotalQueries,
-        })
-        .eq("user_id", userId);
+      const updateResult = await safeDbOperation(
+        () => supabase
+          .from("user_usage")
+          .update({
+            queries_this_month: newQueriesThisMonth,
+            queries_remaining_this_month: newQueriesRemaining,
+            usage_percentage: newUsagePercentage,
+            total_queries: newTotalQueries,
+          })
+          .eq("user_id", userId),
+        "Usage update",
+        3000
+      );
+
+      if (updateResult === null) {
+        console.log('⚠️ handleLogQuery - Usage update failed, but query was logged');
+      }
     }
     
     console.log('✅ handleLogQuery - Query logging completed successfully');
@@ -487,7 +658,9 @@ async function handleLogQuery(supabase: any, userId: string, email: string, quer
     });
   } catch (error) {
     console.error('💥 handleLogQuery - Error:', error);
-    return new Response(JSON.stringify({ error: "Query logging failed" }), {
+    return new Response(JSON.stringify({ 
+      error: "Query logging failed" 
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -498,15 +671,33 @@ async function handleGetUsage(supabase: any, userId: string) {
   console.log('📊 handleGetUsage - Fetching usage for user:', userId);
   
   try {
-    const { data: usage, error } = await supabase
-      .from("user_usage")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
+    const usageResult = await safeDbOperation(
+      () => supabase
+        .from("user_usage")
+        .select("*")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      "Usage data fetch",
+      3000
+    );
+
+    if (usageResult === null) {
+      console.error('💥 handleGetUsage - Database operation failed');
+      return new Response(JSON.stringify({ 
+        error: "Usage data fetch failed" 
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: usage, error } = usageResult;
 
     if (error) {
       console.error('💥 handleGetUsage - Error:', error);
-      return new Response(JSON.stringify({ error: "Usage data fetch failed" }), {
+      return new Response(JSON.stringify({ 
+        error: "Usage data fetch failed" 
+      }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -518,7 +709,9 @@ async function handleGetUsage(supabase: any, userId: string) {
     });
   } catch (error) {
     console.error('💥 handleGetUsage - Error:', error);
-    return new Response(JSON.stringify({ error: "Usage data fetch failed" }), {
+    return new Response(JSON.stringify({ 
+      error: "Usage data fetch failed" 
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
