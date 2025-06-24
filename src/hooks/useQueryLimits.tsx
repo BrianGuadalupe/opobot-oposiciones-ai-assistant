@@ -21,154 +21,76 @@ interface LimitCheckResult {
 export const useQueryLimits = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
+
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+
+  const fetchFromManageUsage = async (action: string, body: any = {}): Promise<any> => {
+    if (!session) throw new Error('No session');
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const { data, error } = await supabase.functions.invoke('manage-usage', {
+      body: { action, ...body },
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (error) throw error;
+    return data;
+  };
 
   const checkQueryLimit = async (): Promise<LimitCheckResult> => {
-    console.log('=== QUERY LIMIT CHECK START ===');
-    console.log('👤 User exists:', !!user);
-    console.log('🔐 Session exists:', !!session);
-
-    if (!session || !user) {
-      console.log('❌ No session or user for limit check');
-      return {
-        canProceed: false,
-        reason: 'no_auth',
-        message: 'Debes iniciar sesión para usar el chat'
-      };
+    if (!user || !session) {
+      return { canProceed: false, reason: 'no_auth', message: 'Debes iniciar sesión para usar el chat' };
     }
 
     try {
       setIsLoading(true);
-      console.log('🔍 About to call manage-usage function...');
-      
-      const startTime = Date.now();
-      
-      // Call the function with a reasonable timeout
-      const { data, error } = await supabase.functions.invoke('manage-usage', {
-        body: { action: 'check_limit' },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
+      const data = await fetchFromManageUsage('check_limit');
 
-      const duration = Date.now() - startTime;
-      console.log('📥 Manage-usage response received after', duration, 'ms');
-      console.log('📥 Response error:', error);
-      console.log('📥 Response data:', data);
-
-      if (error) {
-        console.error('❌ Error in manage-usage function:', error);
-        throw error;
-      }
-
-      if (!data || typeof data !== 'object') {
-        console.error('❌ Invalid response structure:', data);
-        throw new Error('Respuesta inválida del servidor');
-      }
-
-      const canProceed = Boolean(data.canProceed);
       const result: LimitCheckResult = {
-        canProceed: canProceed,
-        reason: data.reason || 'unknown',
-        message: data.message,
-        usageData: data.usageData
+        canProceed: !!data?.canProceed,
+        reason: data?.reason || 'unknown',
+        message: data?.message,
+        usageData: data?.usageData,
       };
-      
-      console.log('✅ Processed result:', result);
-      
-      if (result.usageData) {
-        setUsageData(result.usageData);
-        console.log('📊 Updated usage data:', result.usageData);
-      }
 
-      console.log('✅ Limit check completed successfully in', duration, 'ms');
+      if (result.usageData) setUsageData(result.usageData);
       return result;
-    } catch (error) {
-      console.error('💥 Error checking query limit:', error);
-      console.error('💥 Error message:', error?.message);
-      
-      toast({
-        title: "Error",
-        description: `Error al verificar límites de uso: ${error?.message || 'Error desconocido'}`,
-        variant: "destructive",
-      });
-      
-      return {
-        canProceed: false,
-        reason: 'error',
-        message: `Error al verificar límites de uso: ${error?.message || 'Error desconocido'}`
-      };
+    } catch (err: any) {
+      toast({ title: 'Error', description: `Error al verificar límites: ${err.message || 'desconocido'}`, variant: 'destructive' });
+      return { canProceed: false, reason: 'error', message: err.message || 'Error desconocido' };
     } finally {
       setIsLoading(false);
-      console.log('🏁 Query limit check process completed');
     }
   };
 
   const logQuery = async (queryText: string, responseLength: number) => {
-    console.log('📝 Logging query...');
-    console.log('📝 Query length:', queryText.length);
-    console.log('📝 Response length:', responseLength);
-    
-    if (!session || !user) {
-      console.log('❌ No session for query logging');
-      return;
-    }
-
+    if (!user || !session) return;
     try {
-      const startTime = Date.now();
-      
-      const { data, error } = await supabase.functions.invoke('manage-usage', {
-        body: { 
-          action: 'log_query',
-          queryText,
-          responseLength 
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      const duration = Date.now() - startTime;
-      console.log('✅ Query logged successfully in', duration, 'ms');
-      
-      if (error) {
-        console.error('❌ Error logging query:', error);
-      }
-    } catch (error) {
-      console.error('❌ Error logging query:', error);
+      await fetchFromManageUsage('log_query', { queryText, responseLength });
+    } catch (err) {
+      console.error('Error logging query:', err);
     }
   };
 
   const loadUsageData = async () => {
-    console.log('📊 Loading usage data...');
-    
-    if (!session || !user) {
-      console.log('❌ No session for usage data');
-      return;
-    }
-
     try {
       const result = await checkQueryLimit();
-      if (result.usageData) {
-        setUsageData(result.usageData);
-        console.log('📊 Usage data loaded:', result.usageData);
-      }
-    } catch (error) {
-      console.error('❌ Error loading usage data:', error);
+      if (result.usageData) setUsageData(result.usageData);
+    } catch (err) {
+      console.error('Error loading usage data:', err);
     }
   };
 
   useEffect(() => {
-    console.log('🔄 useQueryLimits useEffect triggered');
-    console.log('🔄 Session state:', !!session);
-    console.log('🔄 User state:', !!user);
-    
-    if (session && user) {
-      console.log('🔄 Loading initial usage data...');
-      loadUsageData();
-    } else {
-      console.log('🔄 Skipping usage data load - no session or user');
+    if (session && user && !initialCheckComplete) {
+      loadUsageData().finally(() => setInitialCheckComplete(true));
     }
   }, [session, user]);
 
@@ -177,6 +99,6 @@ export const useQueryLimits = () => {
     isLoading,
     checkQueryLimit,
     logQuery,
-    loadUsageData
+    loadUsageData,
   };
 };
