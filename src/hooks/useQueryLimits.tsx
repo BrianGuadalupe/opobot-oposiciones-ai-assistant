@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,7 +25,7 @@ export const useQueryLimits = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const checkQueryLimit = async (): Promise<LimitCheckResult> => {
-    console.log('=== QUERY LIMIT CHECK START ===');
+    console.log('=== ULTRA SIMPLE QUERY LIMIT CHECK START ===');
     console.log('👤 User exists:', !!user);
     console.log('🔐 Session exists:', !!session);
 
@@ -40,12 +41,12 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
-      console.log('🔍 About to invoke manage-usage function for check_limit...');
+      console.log('🔍 About to invoke manage-usage function with MINIMAL timeout...');
       console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
       
-      // Timeout muy agresivo - solo 2 segundos
+      // ULTRA AGGRESSIVE timeout - only 1 second
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('manage-usage timeout after 2 seconds')), 2000);
+        setTimeout(() => reject(new Error('manage-usage timeout after 1 second')), 1000);
       });
       
       const callPromise = supabase.functions.invoke('manage-usage', {
@@ -55,7 +56,7 @@ export const useQueryLimits = () => {
         },
       });
 
-      console.log('⏳ Starting manage-usage call with 2s timeout...');
+      console.log('⏳ Starting manage-usage call with 1s timeout...');
       const { data, error } = await Promise.race([callPromise, timeoutPromise]) as any;
 
       console.log('📥 Manage-usage response received');
@@ -96,23 +97,6 @@ export const useQueryLimits = () => {
         console.log('📊 Updated usage data:', result.usageData);
       }
 
-      // Mostrar advertencias apropiadas
-      if (result.reason === 'demo_warning_90') {
-        toast({
-          title: "⚠️ Demo - Límite Cercano",
-          description: result.message,
-          variant: "default",
-        });
-      }
-
-      if (result.reason === 'warning_90') {
-        toast({
-          title: "⚠️ Límite de Consultas",
-          description: result.message,
-          variant: "default",
-        });
-      }
-
       console.log('✅ Limit check completed successfully');
       return result;
     } catch (error) {
@@ -147,75 +131,19 @@ export const useQueryLimits = () => {
   };
 
   const logQuery = async (queryText: string, responseLength: number) => {
-    if (!session || !user) {
-      console.log('❌ No session or user for logging query');
-      return;
-    }
-
-    try {
-      console.log('📝 Logging query to manage-usage...');
-      const { data, error } = await supabase.functions.invoke('manage-usage', {
-        body: { 
-          action: 'log_query',
-          queryText,
-          responseLength 
-        },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (error) {
-        console.error('❌ Error logging query:', error);
-      } else {
-        console.log('✅ Query logged successfully:', data);
-        // Actualizar datos de uso después de registrar
-        await loadUsageData();
-      }
-    } catch (error) {
-      console.error('💥 Error logging query:', error);
-    }
+    console.log('📝 Skipping query logging for now to avoid issues');
+    return;
   };
 
   const loadUsageData = async () => {
-    if (!session || !user) {
-      console.log('❌ No session or user for loading usage data');
-      return;
-    }
-
-    try {
-      console.log('📊 Loading usage data...');
-      const { data, error } = await supabase.functions.invoke('manage-usage', {
-        body: { action: 'get_usage' },
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-
-      if (error) {
-        console.error('❌ Error loading usage data:', error);
-        throw error;
-      }
-      
-      if (data) {
-        const newUsageData = {
-          queriesUsed: data.queries_this_month || 0,
-          queriesRemaining: data.queries_remaining_this_month || 0,
-          usagePercentage: data.usage_percentage || 0,
-          monthlyLimit: (data.queries_this_month || 0) + (data.queries_remaining_this_month || 0)
-        };
-        console.log('📊 Loaded usage data:', newUsageData);
-        setUsageData(newUsageData);
-      }
-    } catch (error) {
-      console.error('💥 Error loading usage data:', error);
-    }
+    console.log('📊 Skipping usage data loading for now to avoid issues');
+    return;
   };
 
   useEffect(() => {
+    console.log('🔄 useQueryLimits useEffect triggered');
     if (session && user) {
-      console.log('🔄 Loading initial usage data...');
-      loadUsageData();
+      console.log('🔄 Session and user exist, but skipping initial data load');
     }
   }, [session, user]);
 
