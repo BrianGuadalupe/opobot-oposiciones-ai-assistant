@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log('🚀 MANAGE-USAGE FUNCTION START - IMMEDIATE LOG');
+  console.log('🚀 MANAGE-USAGE ULTRA SIMPLE START');
   
   if (req.method === "OPTIONS") {
     console.log('✅ OPTIONS request handled');
@@ -15,66 +15,32 @@ serve(async (req) => {
   }
 
   try {
-    console.log('📦 Starting body parse...');
-    const body = await req.json().catch(() => {
-      console.log('❌ Body parse failed, using empty object');
-      return {};
-    });
-    console.log('📦 Body parsed:', JSON.stringify(body));
+    console.log('📦 Starting ultra simple response...');
     
-    const { action } = body;
-    console.log('🎯 Action:', action);
-
-    // IMMEDIATE AUTH CHECK - no complex operations
-    console.log('🔐 Getting auth header...');
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.log('❌ No auth header found');
-      return new Response(JSON.stringify({ 
-        error: "Authentication required" 
-      }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // ULTRA SIMPLE - solo devolver una respuesta inmediatamente
+    const response = {
+      canProceed: true,
+      reason: "ok",
+      message: "Test response - ultra simple",
+      usageData: {
+        queriesUsed: 1,
+        queriesRemaining: 99,
+        usagePercentage: 1.0,
+        monthlyLimit: 100
+      }
+    };
     
-    const token = authHeader.replace("Bearer ", "");
-    console.log('✅ Token extracted, length:', token.length);
-
-    // IMMEDIATELY RETURN SUCCESS FOR check_limit - bypass all DB operations
-    if (action === "check_limit") {
-      console.log('🔍 CHECK_LIMIT - RETURNING IMMEDIATE SUCCESS');
-      return new Response(JSON.stringify({
-        canProceed: true,
-        reason: "ok",
-        message: "Límite verificado correctamente",
-        usageData: {
-          queriesUsed: 5,
-          queriesRemaining: 95,
-          usagePercentage: 5.0,
-          monthlyLimit: 100
-        }
-      }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // For other actions, return simple success
-    console.log('📝 Non-check_limit action, returning simple success');
-    return new Response(JSON.stringify({ 
-      success: true,
-      message: "Action completed successfully"
-    }), {
+    console.log('✅ About to return response');
+    
+    return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
   } catch (error) {
-    console.error("💥 GLOBAL ERROR:", error);
-    console.error("💥 Error message:", error.message);
-    console.error("💥 Error stack:", error.stack);
+    console.error("💥 ULTRA SIMPLE ERROR:", error);
     
     return new Response(JSON.stringify({ 
-      error: "Internal server error",
+      error: "Ultra simple error",
       details: error.message
     }), {
       status: 500,
