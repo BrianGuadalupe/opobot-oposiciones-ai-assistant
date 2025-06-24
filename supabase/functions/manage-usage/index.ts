@@ -7,16 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Ultra-aggressive timeout utility - max 3 seconds for ANY operation
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => 
-      setTimeout(() => reject(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs)
-    )
-  ]);
-}
-
 serve(async (req) => {
   console.log('🚀 MANAGE-USAGE START');
   const startTime = Date.now();
@@ -26,14 +16,12 @@ serve(async (req) => {
   }
 
   try {
-    // STEP 1: Parse body with 1s timeout
-    console.log('📦 Parsing request body...');
-    const body = await withTimeout(req.json(), 1000);
+    // Parse body
+    const body = await req.json();
     const { action } = body;
-    console.log('✅ Action:', action);
+    console.log('📦 Action:', action);
     
-    // STEP 2: Quick auth check
-    console.log('🔐 Checking auth...');
+    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       console.log('❌ No auth header');
@@ -46,25 +34,20 @@ serve(async (req) => {
     }
     
     const token = authHeader.replace("Bearer ", "");
-    console.log('✅ Token extracted, length:', token.length);
+    console.log('✅ Token extracted');
 
-    // STEP 3: Initialize Supabase client
-    console.log('🔧 Creating Supabase client...');
+    // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } }
     );
 
-    // STEP 4: Get user with 2s timeout
-    console.log('👤 Getting user...');
-    const userResult = await withTimeout(
-      supabaseClient.auth.getUser(token),
-      2000
-    );
+    // Get user
+    const userResult = await supabaseClient.auth.getUser(token);
     
-    if (userResult.error || !userResult.data?.user?.email) {
-      console.log('❌ User auth failed:', userResult.error?.message);
+    if (userResult.error || !userResult.data?.user?.id) {
+      console.log('❌ User auth failed');
       return new Response(JSON.stringify({ 
         error: "User authentication failed" 
       }), {
@@ -73,20 +56,17 @@ serve(async (req) => {
       });
     }
 
-    const user = userResult.data.user;
-    console.log('✅ User authenticated:', user.id);
+    const userId = userResult.data.user.id;
+    console.log('✅ User authenticated:', userId);
 
-    // STEP 5: Route to handlers with immediate return
-    console.log('🔀 Routing action:', action);
-    
+    // Route actions
     if (action === "check_limit") {
-      return await handleCheckLimit(supabaseClient, user.id);
+      return await handleCheckLimit(supabaseClient, userId);
     } else if (action === "log_query") {
-      return await handleLogQuery(supabaseClient, user.id, body.queryText, body.responseLength);
+      return await handleLogQuery(supabaseClient, userId, body.queryText, body.responseLength);
     } else if (action === "get_usage") {
-      return await handleGetUsage(supabaseClient, user.id);
+      return await handleGetUsage(supabaseClient, userId);
     } else {
-      console.log('❌ Invalid action:', action);
       return new Response(JSON.stringify({ 
         error: "Invalid action" 
       }), {
@@ -97,11 +77,11 @@ serve(async (req) => {
 
   } catch (error) {
     const executionTime = Date.now() - startTime;
-    console.error("💥 CRITICAL ERROR:", error.message);
-    console.error("⏱️ Execution time:", executionTime, "ms");
+    console.error("💥 ERROR:", error);
+    console.error("⏱️ Time:", executionTime, "ms");
     
     return new Response(JSON.stringify({ 
-      error: error.message || "Internal server error"
+      error: "Internal server error"
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -110,37 +90,21 @@ serve(async (req) => {
 });
 
 async function handleCheckLimit(supabase: any, userId: string) {
-  console.log('🔍 CHECK_LIMIT START - User:', userId);
+  console.log('🔍 CHECK_LIMIT - User:', userId);
   
   try {
-    // SINGLE query with 2s timeout - get everything we need
-    console.log('📊 Fetching user usage...');
-    const usageResult = await withTimeout(
-      supabase
-        .from("user_usage")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      2000
-    );
+    // Single query to get usage
+    console.log('📊 Getting usage...');
+    const { data: usage, error: usageError } = await supabase
+      .from("user_usage")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
 
-    if (usageResult.error) {
-      console.error('❌ Usage query error:', usageResult.error);
+    if (usageError) {
+      console.log('❌ Usage error:', usageError.message);
       return new Response(JSON.stringify({
         canProceed: false,
-        reason: "error",
-        message: "Error al verificar límite"
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const usage = usageResult.data;
-    if (!usage) {
-      console.log('❌ No usage record');
-      return new Response(JSON.stringify({ 
-        canProceed: false, 
         reason: "no_usage_record",
         message: "No se encontró registro de uso"
       }), {
@@ -148,15 +112,15 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    console.log('✅ Usage found:', usage.is_demo_user ? 'DEMO' : 'SUBSCRIPTION');
+    console.log('✅ Usage found:', usage ? 'YES' : 'NO');
 
-    // Quick demo user check
+    // Demo user check
     if (usage.is_demo_user) {
       const queriesUsed = usage.queries_this_month || 0;
       const queriesRemaining = usage.queries_remaining_this_month || 0;
       const usagePercentage = (queriesUsed / 3) * 100;
 
-      console.log('👤 Demo user - Used:', queriesUsed, 'Remaining:', queriesRemaining);
+      console.log('👤 Demo - Used:', queriesUsed, 'Remaining:', queriesRemaining);
 
       if (queriesUsed >= 3) {
         return new Response(JSON.stringify({
@@ -179,31 +143,15 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Quick subscription check with 2s timeout
+    // Subscription user check
     console.log('🔍 Checking subscription...');
-    const subscriberResult = await withTimeout(
-      supabase
-        .from("subscribers")
-        .select("subscribed, subscription_tier")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      2000
-    );
+    const { data: subscriber, error: subError } = await supabase
+      .from("subscribers")
+      .select("subscribed, subscription_tier")
+      .eq("user_id", userId)
+      .single();
 
-    if (subscriberResult.error) {
-      console.error('❌ Subscriber query error:', subscriberResult.error);
-      return new Response(JSON.stringify({
-        canProceed: false,
-        reason: "error",
-        message: "Error al verificar suscripción"
-      }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const subscriber = subscriberResult.data;
-    if (!subscriber?.subscribed) {
+    if (subError || !subscriber?.subscribed) {
       console.log('❌ No active subscription');
       return new Response(JSON.stringify({ 
         canProceed: false, 
@@ -214,14 +162,14 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Process subscription limits
+    // Calculate limits
     const subscriptionTier = subscriber.subscription_tier || "Básico";
-    const monthlyLimit = getMonthlyLimit(subscriptionTier);
+    const monthlyLimit = subscriptionTier === "Básico" ? 100 : 3000;
     const queriesUsed = usage.queries_this_month || 0;
     const queriesRemaining = usage.queries_remaining_this_month || 0;
     const usagePercentage = (queriesUsed / monthlyLimit) * 100;
 
-    console.log('✅ Subscription user - Tier:', subscriptionTier, 'Used:', queriesUsed, 'Limit:', monthlyLimit);
+    console.log('✅ Subscription - Tier:', subscriptionTier, 'Used:', queriesUsed, 'Limit:', monthlyLimit);
 
     // Check limits
     if (queriesUsed >= monthlyLimit) {
@@ -235,7 +183,7 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Success response
+    // Success
     return new Response(JSON.stringify({
       canProceed: true,
       reason: (subscriptionTier === "Básico" && usagePercentage >= 90) ? "warning_90" : "ok",
@@ -246,7 +194,7 @@ async function handleCheckLimit(supabase: any, userId: string) {
     });
     
   } catch (error) {
-    console.error('💥 handleCheckLimit error:', error.message);
+    console.error('💥 handleCheckLimit error:', error);
     return new Response(JSON.stringify({
       canProceed: false,
       reason: "error",
@@ -259,38 +207,29 @@ async function handleCheckLimit(supabase: any, userId: string) {
 }
 
 async function handleLogQuery(supabase: any, userId: string, queryText: string, responseLength: number) {
-  console.log('📝 LOG_QUERY START - User:', userId);
+  console.log('📝 LOG_QUERY - User:', userId);
   
   try {
     const currentMonth = new Date().toISOString().slice(0, 7);
     
-    // Log query with 2s timeout
-    console.log('📝 Inserting query log...');
-    await withTimeout(
-      supabase
-        .from("query_logs")
-        .insert({
-          user_id: userId,
-          query_text: queryText?.substring(0, 500) || '',
-          response_length: responseLength || 0,
-          month_year: currentMonth
-        }),
-      2000
-    );
+    // Log query
+    await supabase
+      .from("query_logs")
+      .insert({
+        user_id: userId,
+        query_text: queryText?.substring(0, 500) || '',
+        response_length: responseLength || 0,
+        month_year: currentMonth
+      });
 
-    // Update usage with 2s timeout
-    console.log('📊 Updating usage...');
-    const usageResult = await withTimeout(
-      supabase
-        .from("user_usage")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      2000
-    );
+    // Update usage
+    const { data: currentUsage } = await supabase
+      .from("user_usage")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
 
-    if (usageResult.data) {
-      const currentUsage = usageResult.data;
+    if (currentUsage) {
       const newQueriesThisMonth = (currentUsage.queries_this_month || 0) + 1;
       const newTotalQueries = (currentUsage.total_queries || 0) + 1;
       
@@ -298,33 +237,29 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
       if (currentUsage.is_demo_user) {
         monthlyLimit = 3;
       } else {
-        monthlyLimit = getMonthlyLimit(currentUsage.subscription_tier);
+        monthlyLimit = currentUsage.subscription_tier === "Básico" ? 100 : 3000;
       }
       
       const newQueriesRemaining = Math.max(0, monthlyLimit - newQueriesThisMonth);
       const newUsagePercentage = (newQueriesThisMonth / monthlyLimit) * 100;
       
-      console.log('📊 Updating usage counts...');
-      await withTimeout(
-        supabase
-          .from("user_usage")
-          .update({
-            queries_this_month: newQueriesThisMonth,
-            queries_remaining_this_month: newQueriesRemaining,
-            usage_percentage: newUsagePercentage,
-            total_queries: newTotalQueries,
-          })
-          .eq("user_id", userId),
-        2000
-      );
+      await supabase
+        .from("user_usage")
+        .update({
+          queries_this_month: newQueriesThisMonth,
+          queries_remaining_this_month: newQueriesRemaining,
+          usage_percentage: newUsagePercentage,
+          total_queries: newTotalQueries,
+        })
+        .eq("user_id", userId);
     }
     
-    console.log('✅ Query logged successfully');
+    console.log('✅ Query logged');
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error('💥 handleLogQuery error:', error.message);
+    console.error('💥 handleLogQuery error:', error);
     return new Response(JSON.stringify({ 
       error: "Query logging failed" 
     }), {
@@ -335,43 +270,30 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
 }
 
 async function handleGetUsage(supabase: any, userId: string) {
-  console.log('📊 GET_USAGE START - User:', userId);
+  console.log('📊 GET_USAGE - User:', userId);
   
   try {
-    console.log('📊 Fetching usage data...');
-    const usageResult = await withTimeout(
-      supabase
-        .from("user_usage")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle(),
-      2000
-    );
+    const { data: usage, error } = await supabase
+      .from("user_usage")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
 
-    if (usageResult.error) {
-      throw usageResult.error;
+    if (error) {
+      throw error;
     }
 
-    console.log('✅ Usage data retrieved');
-    return new Response(JSON.stringify(usageResult.data || {}), {
+    console.log('✅ Usage retrieved');
+    return new Response(JSON.stringify(usage || {}), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error('💥 handleGetUsage error:', error.message);
+    console.error('💥 handleGetUsage error:', error);
     return new Response(JSON.stringify({ 
       error: "Usage data fetch failed" 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  }
-}
-
-function getMonthlyLimit(tier: string): number {
-  switch (tier) {
-    case "Demo": return 3;
-    case "Básico": return 100;
-    case "Profesional": return 3000;
-    default: return 0;
   }
 }

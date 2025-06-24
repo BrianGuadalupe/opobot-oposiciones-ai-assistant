@@ -41,12 +41,12 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
-      console.log('🔍 Calling manage-usage for check_limit...');
+      console.log('🔍 About to invoke manage-usage function for check_limit...');
       console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
       
-      // Ultra-aggressive timeout - 5 seconds max
+      // Timeout ultra-agresivo - solo 3 segundos
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('manage-usage timeout after 5 seconds')), 5000);
+        setTimeout(() => reject(new Error('manage-usage timeout after 3 seconds')), 3000);
       });
       
       const callPromise = supabase.functions.invoke('manage-usage', {
@@ -56,7 +56,7 @@ export const useQueryLimits = () => {
         },
       });
 
-      console.log('⏳ Starting manage-usage call with 5s timeout...');
+      console.log('⏳ Starting manage-usage call with 3s timeout...');
       const { data, error } = await Promise.race([callPromise, timeoutPromise]) as any;
 
       console.log('📥 Manage-usage response received');
@@ -68,7 +68,6 @@ export const useQueryLimits = () => {
         throw error;
       }
 
-      // Verificar que la respuesta tenga la estructura esperada
       if (!data || typeof data !== 'object') {
         console.error('❌ Invalid response structure:', data);
         throw new Error('Respuesta inválida del servidor');
@@ -120,12 +119,19 @@ export const useQueryLimits = () => {
     } catch (error) {
       console.error('💥 Error checking query limit:', error);
       console.error('💥 Error message:', error?.message);
+      console.error('💥 Error stack:', error?.stack);
       
       if (error?.message?.includes('timeout')) {
         console.error('⏰ TIMEOUT ERROR - manage-usage took too long');
         toast({
           title: "Error de Tiempo",
           description: "La verificación tardó demasiado. Intenta de nuevo.",
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Error al verificar límite de consultas",
           variant: "destructive",
         });
       }
