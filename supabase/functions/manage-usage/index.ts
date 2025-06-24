@@ -9,19 +9,20 @@ const corsHeaders = {
 
 serve(async (req) => {
   console.log('🚀 MANAGE-USAGE START');
-  const startTime = Date.now();
   
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse body
-    const body = await req.json();
+    // Parse body FIRST - this might be hanging
+    console.log('📦 Parsing request body...');
+    const body = await req.json().catch(() => ({}));
     const { action } = body;
     console.log('📦 Action:', action);
     
-    // Auth check
+    // Auth check SECOND
+    console.log('🔐 Checking auth header...');
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       console.log('❌ No auth header');
@@ -34,20 +35,22 @@ serve(async (req) => {
     }
     
     const token = authHeader.replace("Bearer ", "");
-    console.log('✅ Token extracted');
+    console.log('✅ Token extracted, length:', token.length);
 
-    // Create Supabase client
+    // Create Supabase client THIRD
+    console.log('🔧 Creating Supabase client...');
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } }
     );
 
-    // Get user
+    // Get user FOURTH
+    console.log('👤 Getting user...');
     const userResult = await supabaseClient.auth.getUser(token);
     
     if (userResult.error || !userResult.data?.user?.id) {
-      console.log('❌ User auth failed');
+      console.log('❌ User auth failed:', userResult.error?.message);
       return new Response(JSON.stringify({ 
         error: "User authentication failed" 
       }), {
@@ -57,16 +60,20 @@ serve(async (req) => {
     }
 
     const userId = userResult.data.user.id;
-    console.log('✅ User authenticated:', userId);
+    console.log('✅ User authenticated:', userId.substring(0, 8) + '...');
 
-    // Route actions
+    // Route actions FIFTH
     if (action === "check_limit") {
+      console.log('🔍 Starting check_limit handler...');
       return await handleCheckLimit(supabaseClient, userId);
     } else if (action === "log_query") {
+      console.log('📝 Starting log_query handler...');
       return await handleLogQuery(supabaseClient, userId, body.queryText, body.responseLength);
     } else if (action === "get_usage") {
+      console.log('📊 Starting get_usage handler...');
       return await handleGetUsage(supabaseClient, userId);
     } else {
+      console.log('❌ Invalid action:', action);
       return new Response(JSON.stringify({ 
         error: "Invalid action" 
       }), {
@@ -76,12 +83,11 @@ serve(async (req) => {
     }
 
   } catch (error) {
-    const executionTime = Date.now() - startTime;
-    console.error("💥 ERROR:", error);
-    console.error("⏱️ Time:", executionTime, "ms");
+    console.error("💥 GLOBAL ERROR:", error);
     
     return new Response(JSON.stringify({ 
-      error: "Internal server error"
+      error: "Internal server error",
+      details: error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -90,16 +96,19 @@ serve(async (req) => {
 });
 
 async function handleCheckLimit(supabase: any, userId: string) {
-  console.log('🔍 CHECK_LIMIT - User:', userId);
+  console.log('🔍 CHECK_LIMIT START for user:', userId.substring(0, 8) + '...');
   
   try {
-    // Single query to get usage
-    console.log('📊 Getting usage...');
+    console.log('📊 About to query user_usage...');
+    
+    // ULTRA SIMPLE query - just get what we need
     const { data: usage, error: usageError } = await supabase
       .from("user_usage")
-      .select("*")
+      .select("is_demo_user, queries_this_month, queries_remaining_this_month, subscription_tier")
       .eq("user_id", userId)
       .single();
+
+    console.log('📊 Usage query completed. Error:', usageError?.message, 'Data exists:', !!usage);
 
     if (usageError) {
       console.log('❌ Usage error:', usageError.message);
@@ -112,17 +121,18 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    console.log('✅ Usage found:', usage ? 'YES' : 'NO');
+    console.log('✅ Usage data retrieved successfully');
 
-    // Demo user check
+    // Demo user check FIRST
     if (usage.is_demo_user) {
       const queriesUsed = usage.queries_this_month || 0;
       const queriesRemaining = usage.queries_remaining_this_month || 0;
       const usagePercentage = (queriesUsed / 3) * 100;
 
-      console.log('👤 Demo - Used:', queriesUsed, 'Remaining:', queriesRemaining);
+      console.log('👤 Demo user - Used:', queriesUsed, 'Remaining:', queriesRemaining);
 
       if (queriesUsed >= 3) {
+        console.log('🚫 Demo limit reached');
         return new Response(JSON.stringify({
           canProceed: false,
           reason: "demo_limit_reached",
@@ -133,6 +143,7 @@ async function handleCheckLimit(supabase: any, userId: string) {
         });
       }
 
+      console.log('✅ Demo user can proceed');
       return new Response(JSON.stringify({
         canProceed: true,
         reason: usagePercentage >= 90 ? "demo_warning_90" : "ok",
@@ -143,13 +154,15 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Subscription user check
-    console.log('🔍 Checking subscription...');
+    // Regular subscription user
+    console.log('🔍 Checking subscription for regular user...');
     const { data: subscriber, error: subError } = await supabase
       .from("subscribers")
       .select("subscribed, subscription_tier")
       .eq("user_id", userId)
       .single();
+
+    console.log('📊 Subscriber query completed. Error:', subError?.message, 'Subscribed:', subscriber?.subscribed);
 
     if (subError || !subscriber?.subscribed) {
       console.log('❌ No active subscription');
@@ -162,17 +175,18 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Calculate limits
+    // Calculate limits for subscription
     const subscriptionTier = subscriber.subscription_tier || "Básico";
     const monthlyLimit = subscriptionTier === "Básico" ? 100 : 3000;
     const queriesUsed = usage.queries_this_month || 0;
     const queriesRemaining = usage.queries_remaining_this_month || 0;
     const usagePercentage = (queriesUsed / monthlyLimit) * 100;
 
-    console.log('✅ Subscription - Tier:', subscriptionTier, 'Used:', queriesUsed, 'Limit:', monthlyLimit);
+    console.log('✅ Subscription check complete - Tier:', subscriptionTier, 'Used:', queriesUsed, 'Limit:', monthlyLimit);
 
     // Check limits
     if (queriesUsed >= monthlyLimit) {
+      console.log('🚫 Monthly limit reached');
       return new Response(JSON.stringify({
         canProceed: false,
         reason: "limit_reached",
@@ -183,7 +197,8 @@ async function handleCheckLimit(supabase: any, userId: string) {
       });
     }
 
-    // Success
+    // Success response
+    console.log('✅ Check limit completed successfully');
     return new Response(JSON.stringify({
       canProceed: true,
       reason: (subscriptionTier === "Básico" && usagePercentage >= 90) ? "warning_90" : "ok",
@@ -198,7 +213,7 @@ async function handleCheckLimit(supabase: any, userId: string) {
     return new Response(JSON.stringify({
       canProceed: false,
       reason: "error",
-      message: "Error al verificar límite"
+      message: "Error al verificar límite: " + error.message
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -207,12 +222,13 @@ async function handleCheckLimit(supabase: any, userId: string) {
 }
 
 async function handleLogQuery(supabase: any, userId: string, queryText: string, responseLength: number) {
-  console.log('📝 LOG_QUERY - User:', userId);
+  console.log('📝 LOG_QUERY START for user:', userId.substring(0, 8) + '...');
   
   try {
     const currentMonth = new Date().toISOString().slice(0, 7);
     
     // Log query
+    console.log('📝 Inserting query log...');
     await supabase
       .from("query_logs")
       .insert({
@@ -222,7 +238,7 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
         month_year: currentMonth
       });
 
-    // Update usage
+    console.log('📊 Getting current usage...');
     const { data: currentUsage } = await supabase
       .from("user_usage")
       .select("*")
@@ -243,6 +259,7 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
       const newQueriesRemaining = Math.max(0, monthlyLimit - newQueriesThisMonth);
       const newUsagePercentage = (newQueriesThisMonth / monthlyLimit) * 100;
       
+      console.log('📊 Updating usage...');
       await supabase
         .from("user_usage")
         .update({
@@ -254,14 +271,14 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
         .eq("user_id", userId);
     }
     
-    console.log('✅ Query logged');
+    console.log('✅ Query logged successfully');
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error('💥 handleLogQuery error:', error);
     return new Response(JSON.stringify({ 
-      error: "Query logging failed" 
+      error: "Query logging failed: " + error.message 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -270,7 +287,7 @@ async function handleLogQuery(supabase: any, userId: string, queryText: string, 
 }
 
 async function handleGetUsage(supabase: any, userId: string) {
-  console.log('📊 GET_USAGE - User:', userId);
+  console.log('📊 GET_USAGE START for user:', userId.substring(0, 8) + '...');
   
   try {
     const { data: usage, error } = await supabase
@@ -283,14 +300,14 @@ async function handleGetUsage(supabase: any, userId: string) {
       throw error;
     }
 
-    console.log('✅ Usage retrieved');
+    console.log('✅ Usage retrieved successfully');
     return new Response(JSON.stringify(usage || {}), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
     console.error('💥 handleGetUsage error:', error);
     return new Response(JSON.stringify({ 
-      error: "Usage data fetch failed" 
+      error: "Usage data fetch failed: " + error.message 
     }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

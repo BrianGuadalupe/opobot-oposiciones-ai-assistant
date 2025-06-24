@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -44,9 +43,9 @@ export const useQueryLimits = () => {
       console.log('🔍 About to invoke manage-usage function for check_limit...');
       console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
       
-      // Timeout ultra-agresivo - solo 3 segundos
+      // Timeout muy agresivo - solo 2 segundos
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('manage-usage timeout after 3 seconds')), 3000);
+        setTimeout(() => reject(new Error('manage-usage timeout after 2 seconds')), 2000);
       });
       
       const callPromise = supabase.functions.invoke('manage-usage', {
@@ -56,7 +55,7 @@ export const useQueryLimits = () => {
         },
       });
 
-      console.log('⏳ Starting manage-usage call with 3s timeout...');
+      console.log('⏳ Starting manage-usage call with 2s timeout...');
       const { data, error } = await Promise.race([callPromise, timeoutPromise]) as any;
 
       console.log('📥 Manage-usage response received');
