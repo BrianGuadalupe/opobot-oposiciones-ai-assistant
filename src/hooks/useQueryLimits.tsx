@@ -29,16 +29,10 @@ export const useQueryLimits = () => {
   const fetchFromManageUsage = async (action: string, body: any = {}): Promise<any> => {
     if (!session) throw new Error('No session');
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-
     const { data, error } = await supabase.functions.invoke('manage-usage', {
       body: { action, ...body },
       headers: { Authorization: `Bearer ${session.access_token}` },
-      signal: controller.signal,
     });
-
-    clearTimeout(timeoutId);
 
     if (error) throw error;
     return data;
