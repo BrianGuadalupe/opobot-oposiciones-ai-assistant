@@ -20,7 +20,7 @@ export const useChat = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
-  const { checkQueryLimit, logQuery } = useQueryLimits();
+  const { checkQueryLimit, logQuery, initialCheckComplete } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
 
   const sendMessage = async (content: string) => {
@@ -29,8 +29,8 @@ export const useChat = () => {
     console.log('👤 Session present:', !!session);
     console.log('👤 User present:', !!user);
     console.log('✅ Subscription ready:', subscriptionReady);
+    console.log('🔍 Initial check complete:', initialCheckComplete);
     console.log('🔑 Access token present:', !!session?.access_token);
-    console.log('🔑 Access token length:', session?.access_token?.length || 0);
 
     // Verificaciones básicas de autenticación
     if (!session || !user) {
@@ -43,12 +43,22 @@ export const useChat = () => {
       return;
     }
 
-    // Verificación crítica: solo proceder si la suscripción está lista
+    // NUEVA VERIFICACIÓN: Esperar tanto suscripción como verificación inicial de límites
     if (!subscriptionReady) {
       console.log('❌ EARLY EXIT: Subscription not ready yet');
       toast({ 
         title: "Un momento...", 
         description: "Verificando tu suscripción, intenta de nuevo en unos segundos", 
+        variant: "default" 
+      });
+      return;
+    }
+
+    if (!initialCheckComplete) {
+      console.log('❌ EARLY EXIT: Initial limit check not complete yet');
+      toast({ 
+        title: "Un momento...", 
+        description: "Verificando tus límites de uso, intenta de nuevo en unos segundos", 
         variant: "default" 
       });
       return;
@@ -68,13 +78,13 @@ export const useChat = () => {
     registerQuestion(content);
 
     try {
-      // Verificar límites solo cuando todo esté listo
-      console.log('🔍 About to check query limits...');
-      const limitCheck = await checkQueryLimit();
+      // Verificar límites con refresh forzado para asegurar datos actuales
+      console.log('🔍 About to check query limits with forced refresh...');
+      const limitCheck = await checkQueryLimit(true);
       console.log('🔍 Limit check result:', limitCheck);
       
       if (!limitCheck.canProceed) {
-        console.log('❌ EARLY EXIT: Query limit exceeded');
+        console.log('❌ EARLY EXIT: Query limit check failed -', limitCheck.reason);
         toast({ 
           title: "🚫 Límite Alcanzado", 
           description: limitCheck.message || "Has alcanzado el límite de consultas", 
@@ -93,7 +103,6 @@ export const useChat = () => {
 
       console.log('🤖 About to call chat-opobot function...');
       console.log('🤖 Conversation history length:', conversationHistory.length);
-      console.log('🤖 Using session access token:', session.access_token?.substring(0, 20) + '...');
 
       // Preparar el cuerpo de la petición
       const requestBody = { 
@@ -130,8 +139,6 @@ export const useChat = () => {
       console.log('📡 Raw response received from chat-opobot');
       console.log('📡 Error object:', error);
       console.log('📡 Data object:', data);
-      console.log('📡 Data type:', typeof data);
-      console.log('📡 Data keys:', data ? Object.keys(data) : 'N/A');
 
       if (error) {
         console.error('❌ Supabase function error details:', {
@@ -145,15 +152,12 @@ export const useChat = () => {
 
       if (!data) {
         console.error('❌ No data received from chat-opobot');
-        console.error('❌ This suggests the function may not be running or returning anything');
         throw new Error('No se recibió respuesta del asistente (data is null/undefined)');
       }
 
       console.log('🔍 Analyzing response structure...');
       console.log('🔍 data.success:', data.success);
       console.log('🔍 data.message present:', !!data.message);
-      console.log('🔍 data.message length:', data.message?.length || 0);
-      console.log('🔍 data.error:', data.error);
 
       if (!data.success) {
         console.error('❌ Function returned success=false');
@@ -163,7 +167,6 @@ export const useChat = () => {
 
       if (!data.message) {
         console.error('❌ Function returned success=true but no message');
-        console.error('❌ Full data object:', JSON.stringify(data, null, 2));
         throw new Error("El asistente no devolvió un mensaje válido");
       }
 
@@ -189,9 +192,7 @@ export const useChat = () => {
 
     } catch (error: any) {
       console.error('💥 CRITICAL ERROR in sendMessage:', error);
-      console.error('💥 Error name:', error.name);
       console.error('💥 Error message:', error.message);
-      console.error('💥 Error stack:', error.stack);
       
       toast({ 
         title: "Error en el Chat", 

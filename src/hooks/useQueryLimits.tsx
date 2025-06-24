@@ -51,8 +51,12 @@ export const useQueryLimits = () => {
     return data;
   };
 
-  const checkQueryLimit = async (): Promise<LimitCheckResult> => {
+  const checkQueryLimit = async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
     console.log('=== CHECK QUERY LIMIT START ===');
+    console.log('🔍 Force refresh:', forceRefresh);
+    console.log('🔍 Initial check complete:', initialCheckComplete);
+    console.log('🔍 Is loading:', isLoading);
+    console.log('🔍 User/session present:', !!user, !!session);
     
     if (!user || !session) {
       console.log('❌ No user or session for limit check');
@@ -63,20 +67,34 @@ export const useQueryLimits = () => {
       };
     }
 
-    // Control de concurrencia
-    if (isChecking) {
-      console.log('⚠️ Limit check already in progress, returning cached or waiting state');
-      return lastCheckResult || {
+    // NUEVA LÓGICA: No usar caché si no hemos completado el check inicial
+    if (!initialCheckComplete && !forceRefresh) {
+      console.log('⚠️ Initial check not complete, forcing fresh check');
+      forceRefresh = true;
+    }
+
+    // Control de concurrencia - pero permitir si es forzado
+    if (isChecking && !forceRefresh) {
+      console.log('⚠️ Limit check already in progress, using cached or waiting state');
+      
+      // Si tenemos caché válido, usarlo
+      if (lastCheckResult && initialCheckComplete) {
+        console.log('📋 Using cached result while checking');
+        return lastCheckResult;
+      }
+      
+      // Si no hay caché válido, devolver estado de espera
+      return {
         canProceed: false,
-        reason: 'already_checking',
-        message: 'Ya se está verificando el límite. Espera un momento.',
+        reason: 'checking_in_progress',
+        message: 'Verificando límites, espera un momento...',
       };
     }
 
-    // Verificar caché
+    // Verificar caché solo si el check inicial está completo
     const now = Date.now();
-    if (lastCheckResult && (now - lastCheckTime) < CACHE_DURATION) {
-      console.log('📋 Using cached limit check result');
+    if (!forceRefresh && lastCheckResult && initialCheckComplete && (now - lastCheckTime) < CACHE_DURATION) {
+      console.log('📋 Using cached limit check result (initial complete)');
       return lastCheckResult;
     }
 
@@ -102,6 +120,12 @@ export const useQueryLimits = () => {
         setUsageData(result.usageData);
       }
 
+      // Marcar como completado solo después del primer éxito
+      if (!initialCheckComplete) {
+        setInitialCheckComplete(true);
+        console.log('✅ Initial check completed successfully');
+      }
+
       console.log('✅ Limit check completed:', result);
       return result;
       
@@ -119,7 +143,12 @@ export const useQueryLimits = () => {
         message: err.message || 'Error desconocido'
       };
       
-      // No cachear errores, pero liberar el lock
+      // No cachear errores, pero marcar inicial como completado si es el primer intento
+      if (!initialCheckComplete) {
+        setInitialCheckComplete(true);
+        console.log('⚠️ Initial check completed with error');
+      }
+      
       lastCheckResult = null;
       return errorResult;
       
@@ -147,8 +176,8 @@ export const useQueryLimits = () => {
 
   const loadUsageData = async () => {
     try {
-      console.log('📊 Loading usage data...');
-      const result = await checkQueryLimit();
+      console.log('📊 Loading initial usage data...');
+      const result = await checkQueryLimit(true); // Forzar refresh en carga inicial
       if (result.usageData) {
         setUsageData(result.usageData);
       }
@@ -160,16 +189,14 @@ export const useQueryLimits = () => {
   useEffect(() => {
     if (session && user && !initialCheckComplete) {
       console.log('🚀 Initial usage data load...');
-      loadUsageData().finally(() => {
-        setInitialCheckComplete(true);
-        console.log('✅ Initial check completed');
-      });
+      loadUsageData();
     }
   }, [session, user]);
 
   return {
     usageData,
     isLoading,
+    initialCheckComplete,
     checkQueryLimit,
     logQuery,
     loadUsageData,
