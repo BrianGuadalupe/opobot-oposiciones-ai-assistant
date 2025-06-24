@@ -95,17 +95,17 @@ export const useQueryLimits = () => {
     
     if (!user || !session) {
       console.log('❌ No user or session for limit check');
-      return { 
+      const result = { 
         canProceed: false, 
         reason: 'no_auth', 
         message: 'Debes iniciar sesión para usar el chat' 
       };
-    }
-
-    // NUEVA LÓGICA: No usar caché si no hemos completado el check inicial
-    if (!initialCheckComplete && !forceRefresh) {
-      console.log('⚠️ Initial check not complete, forcing fresh check');
-      forceRefresh = true;
+      // Marcar como completado incluso sin auth para evitar bucles
+      if (!initialCheckComplete) {
+        console.log('✅ Setting initialCheckComplete = true (no auth case)');
+        setInitialCheckComplete(true);
+      }
+      return result;
     }
 
     // Control de concurrencia - pero permitir si es forzado
@@ -133,12 +133,14 @@ export const useQueryLimits = () => {
       return lastCheckResult;
     }
 
+    console.log('🔍 Starting actual limit check process...');
     isChecking = true;
     setIsLoading(true);
     
     try {
       console.log('🔍 Performing fresh limit check...');
       const data = await fetchFromManageUsage('check_limit');
+      console.log('✅ manage-usage responded with:', data);
 
       const result: LimitCheckResult = {
         canProceed: !!data?.canProceed,
@@ -152,10 +154,11 @@ export const useQueryLimits = () => {
       lastCheckTime = now;
 
       if (result.usageData) {
+        console.log('📊 Updating usage data:', result.usageData);
         setUsageData(result.usageData);
       }
 
-      console.log('✅ Limit check completed:', result);
+      console.log('✅ Limit check completed successfully:', result);
       return result;
       
     } catch (err: any) {
@@ -174,9 +177,11 @@ export const useQueryLimits = () => {
       
       // No cachear errores
       lastCheckResult = null;
+      console.log('❌ Error result:', errorResult);
       return errorResult;
       
     } finally {
+      console.log('🔄 Entering finally block...');
       isChecking = false;
       setIsLoading(false);
       
@@ -184,7 +189,10 @@ export const useQueryLimits = () => {
       if (!initialCheckComplete) {
         console.log('✅ Setting initialCheckComplete = true (first check completed)');
         setInitialCheckComplete(true);
+      } else {
+        console.log('✅ initialCheckComplete was already true');
       }
+      console.log('🔄 Finally block completed');
     }
   };
 
@@ -208,6 +216,7 @@ export const useQueryLimits = () => {
     try {
       console.log('📊 Loading initial usage data...');
       const result = await checkQueryLimit(true); // Forzar refresh en carga inicial
+      console.log('📊 Initial usage data loaded:', result);
       if (result.usageData) {
         setUsageData(result.usageData);
       }
@@ -218,10 +227,10 @@ export const useQueryLimits = () => {
 
   useEffect(() => {
     if (session && user && !initialCheckComplete) {
-      console.log('🚀 Initial usage data load...');
+      console.log('🚀 Initial usage data load triggered...');
       loadUsageData();
     }
-  }, [session, user]);
+  }, [session, user, initialCheckComplete]);
 
   return {
     usageData,
