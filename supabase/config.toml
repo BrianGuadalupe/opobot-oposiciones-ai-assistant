@@ -62,6 +62,9 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
 
+[functions.manage-usage]
+verify_jwt = true
+
 [db]
 enabled = true
 port = 54322
