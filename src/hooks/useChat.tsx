@@ -28,7 +28,6 @@ export const useChat = () => {
     console.log('📝 Content:', content.substring(0, 100) + '...');
     console.log('👤 Session exists:', !!session);
     console.log('🔄 Subscription ready:', subscriptionReady);
-    console.log('🔄 Subscription loading:', subscriptionLoading);
 
     if (!session) {
       console.log('❌ No session for chat');
@@ -41,7 +40,7 @@ export const useChat = () => {
     }
 
     if (!subscriptionReady) {
-      console.log('⏳ Subscription not ready yet, cannot proceed with chat');
+      console.log('⏳ Subscription not ready yet');
       toast({
         title: "Un momento...",
         description: "Verificando tu suscripción, intenta de nuevo en unos segundos",
@@ -54,7 +53,6 @@ export const useChat = () => {
     
     try {
       setIsLoading(true);
-      console.log('⏳ About to call checkQueryLimit...');
       
       const limitCheckStart = Date.now();
       const limitCheck = await checkQueryLimit();
@@ -104,7 +102,6 @@ export const useChat = () => {
       }));
 
       console.log('🤖 About to call chat-opobot function...');
-      console.log('📚 Conversation history length:', conversationHistory.length);
       
       const chatStart = Date.now();
       
@@ -120,8 +117,6 @@ export const useChat = () => {
 
       const chatDuration = Date.now() - chatStart;
       console.log('✅ Chat-opobot response received in', chatDuration, 'ms');
-      console.log('📥 Response data:', data);
-      console.log('❌ Response error:', error);
 
       if (error) {
         console.error('❌ Error from chat-opobot:', error);
@@ -153,17 +148,15 @@ export const useChat = () => {
       setMessages(prev => [...prev, assistantMessage]);
 
       console.log('📊 Logging query with useQueryLimits...');
-      const logStart = Date.now();
       
-      await logQuery(content, data.message.length);
-      
-      const logDuration = Date.now() - logStart;
-      console.log('✅ Query logged successfully in', logDuration, 'ms');
+      // Log query without blocking
+      logQuery(content, data.message.length).catch(error => {
+        console.error('❌ Error logging query:', error);
+      });
 
     } catch (error) {
       console.error('💥 Error in chat flow:', error);
       console.error('💥 Error message:', error?.message);
-      console.error('💥 Error stack:', error?.stack);
       
       toast({
         title: "Error en el Chat",
@@ -171,7 +164,7 @@ export const useChat = () => {
         variant: "destructive",
       });
 
-      // Remover el mensaje del usuario en caso de error
+      // Remove the user message in case of error
       setMessages(prev => prev.slice(0, -1));
     } finally {
       setIsLoading(false);

@@ -28,9 +28,6 @@ export const useQueryLimits = () => {
     console.log('=== QUERY LIMIT CHECK START ===');
     console.log('👤 User exists:', !!user);
     console.log('🔐 Session exists:', !!session);
-    console.log('🔐 Session token length:', session?.access_token?.length || 0);
-    console.log('👤 User ID:', user?.id?.substring(0, 8) + '...' || 'none');
-    console.log('👤 User email:', user?.email || 'none');
 
     if (!session || !user) {
       console.log('❌ No session or user for limit check');
@@ -44,10 +41,10 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       console.log('🔍 About to call manage-usage function...');
-      console.log('🔍 Function call timestamp:', new Date().toISOString());
       
       const startTime = Date.now();
       
+      // Call the function with a reasonable timeout
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { action: 'check_limit' },
         headers: {
@@ -55,17 +52,13 @@ export const useQueryLimits = () => {
         },
       });
 
-      const endTime = Date.now();
-      const duration = endTime - startTime;
-      
+      const duration = Date.now() - startTime;
       console.log('📥 Manage-usage response received after', duration, 'ms');
       console.log('📥 Response error:', error);
       console.log('📥 Response data:', data);
 
       if (error) {
         console.error('❌ Error in manage-usage function:', error);
-        console.error('❌ Error message:', error.message);
-        console.error('❌ Error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
@@ -94,7 +87,6 @@ export const useQueryLimits = () => {
     } catch (error) {
       console.error('💥 Error checking query limit:', error);
       console.error('💥 Error message:', error?.message);
-      console.error('💥 Error stack:', error?.stack);
       
       toast({
         title: "Error",
