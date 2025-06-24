@@ -88,16 +88,41 @@ export const useChat = () => {
       }));
 
       console.log('🤖 Calling chat-opobot...');
-      const { data, error } = await supabase.functions.invoke('chat-opobot', {
+      console.log('🤖 Session access token present:', !!session.access_token);
+      console.log('🤖 Conversation history length:', conversationHistory.length);
+
+      // Timeout para la llamada
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Timeout: El asistente no respondió en 30 segundos')), 30000);
+      });
+
+      const chatPromise = supabase.functions.invoke('chat-opobot', {
         body: { message: content, conversationHistory },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
-      if (error || !data?.success || !data?.message) {
-        throw new Error(data?.error || error?.message || "Error en el chat");
+      const { data, error } = await Promise.race([chatPromise, timeoutPromise]) as any;
+
+      console.log('🤖 Chat-opobot response received');
+      console.log('🤖 Error:', error);
+      console.log('🤖 Data:', data);
+
+      if (error) {
+        console.error('❌ Supabase function error:', error);
+        throw new Error(`Error de conexión: ${error.message}`);
       }
 
-      console.log('✅ Chat response received');
+      if (!data) {
+        console.error('❌ No data received from chat-opobot');
+        throw new Error('No se recibió respuesta del asistente');
+      }
+
+      if (!data.success || !data.message) {
+        console.error('❌ Invalid response from chat-opobot:', data);
+        throw new Error(data.error || "Error en el chat");
+      }
+
+      console.log('✅ Chat response received successfully');
 
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
