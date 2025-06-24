@@ -20,7 +20,7 @@ export const useChat = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
-  const { checkQueryLimit, logQuery, initialCheckComplete } = useQueryLimits();
+  const { checkQueryLimit, logQuery, waitUntilReady } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
 
   const sendMessage = async (content: string) => {
@@ -29,7 +29,6 @@ export const useChat = () => {
     console.log('👤 Session present:', !!session);
     console.log('👤 User present:', !!user);
     console.log('✅ Subscription ready:', subscriptionReady);
-    console.log('🔍 Initial check complete:', initialCheckComplete);
     console.log('🔑 Access token present:', !!session?.access_token);
 
     // Verificaciones básicas de autenticación
@@ -43,7 +42,7 @@ export const useChat = () => {
       return;
     }
 
-    // NUEVA VERIFICACIÓN: Esperar tanto suscripción como verificación inicial de límites
+    // Verificar que la suscripción esté lista
     if (!subscriptionReady) {
       console.log('❌ EARLY EXIT: Subscription not ready yet');
       toast({ 
@@ -54,17 +53,10 @@ export const useChat = () => {
       return;
     }
 
-    if (!initialCheckComplete) {
-      console.log('❌ EARLY EXIT: Initial limit check not complete yet');
-      toast({ 
-        title: "Un momento...", 
-        description: "Verificando tus límites de uso, intenta de nuevo en unos segundos", 
-        variant: "default" 
-      });
-      return;
-    }
+    console.log('⏳ Waiting for limit system to be ready...');
+    await waitUntilReady();
+    console.log('✅ Limit system ready, continuing...');
 
-    console.log('✅ All pre-checks passed, proceeding with message...');
     setIsLoading(true);
     
     const userMessage: ChatMessage = {
@@ -101,7 +93,7 @@ export const useChat = () => {
         content: msg.content 
       }));
 
-      console.log('🤖 About to call chat-opobot function...');
+      console.log('🚀 Invoking chat-opobot function now...');
       console.log('🤖 Conversation history length:', conversationHistory.length);
 
       // Preparar el cuerpo de la petición

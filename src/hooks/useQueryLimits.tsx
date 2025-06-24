@@ -51,6 +51,34 @@ export const useQueryLimits = () => {
     return data;
   };
 
+  const waitUntilReady = async (): Promise<void> => {
+    console.log('⏳ waitUntilReady called, initialCheckComplete:', initialCheckComplete);
+    
+    if (initialCheckComplete) {
+      console.log('✅ Already ready, returning immediately');
+      return;
+    }
+    
+    console.log('⏳ Waiting for initial check to complete...');
+    return new Promise((resolve) => {
+      const interval = setInterval(() => {
+        console.log('🔍 Checking if ready... initialCheckComplete:', initialCheckComplete);
+        if (initialCheckComplete) {
+          console.log('✅ Ready! Clearing interval and resolving');
+          clearInterval(interval);
+          resolve();
+        }
+      }, 50); // check cada 50ms
+      
+      // Timeout de seguridad después de 10 segundos
+      setTimeout(() => {
+        console.warn('⚠️ waitUntilReady timeout after 10 seconds');
+        clearInterval(interval);
+        resolve();
+      }, 10000);
+    });
+  };
+
   const checkQueryLimit = async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
     console.log('=== CHECK QUERY LIMIT START ===');
     console.log('🔍 Force refresh:', forceRefresh);
@@ -122,8 +150,8 @@ export const useQueryLimits = () => {
 
       // Marcar como completado solo después del primer éxito
       if (!initialCheckComplete) {
+        console.log('✅ Initial check completed successfully - setting initialCheckComplete = true');
         setInitialCheckComplete(true);
-        console.log('✅ Initial check completed successfully');
       }
 
       console.log('✅ Limit check completed:', result);
@@ -145,8 +173,8 @@ export const useQueryLimits = () => {
       
       // No cachear errores, pero marcar inicial como completado si es el primer intento
       if (!initialCheckComplete) {
+        console.log('⚠️ Initial check completed with error - setting initialCheckComplete = true');
         setInitialCheckComplete(true);
-        console.log('⚠️ Initial check completed with error');
       }
       
       lastCheckResult = null;
@@ -200,5 +228,6 @@ export const useQueryLimits = () => {
     checkQueryLimit,
     logQuery,
     loadUsageData,
+    waitUntilReady,
   };
 };
