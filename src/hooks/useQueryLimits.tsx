@@ -60,22 +60,29 @@ export const useQueryLimits = () => {
     }
     
     console.log('⏳ Waiting for initial check to complete...');
+    const startTime = Date.now();
+    
     return new Promise((resolve) => {
-      const interval = setInterval(() => {
+      const checkReady = () => {
         console.log('🔍 Checking if ready... initialCheckComplete:', initialCheckComplete);
         if (initialCheckComplete) {
-          console.log('✅ Ready! Clearing interval and resolving');
-          clearInterval(interval);
+          console.log('✅ Ready! Resolving waitUntilReady');
           resolve();
+          return;
         }
-      }, 50); // check cada 50ms
+        
+        // Timeout de seguridad después de 10 segundos
+        if (Date.now() - startTime > 10000) {
+          console.warn('⚠️ waitUntilReady timeout after 10 seconds, resolving anyway');
+          resolve();
+          return;
+        }
+        
+        // Continuar verificando cada 200ms
+        setTimeout(checkReady, 200);
+      };
       
-      // Timeout de seguridad después de 10 segundos
-      setTimeout(() => {
-        console.warn('⚠️ waitUntilReady timeout after 10 seconds');
-        clearInterval(interval);
-        resolve();
-      }, 10000);
+      checkReady();
     });
   };
 
@@ -148,12 +155,6 @@ export const useQueryLimits = () => {
         setUsageData(result.usageData);
       }
 
-      // Marcar como completado solo después del primer éxito
-      if (!initialCheckComplete) {
-        console.log('✅ Initial check completed successfully - setting initialCheckComplete = true');
-        setInitialCheckComplete(true);
-      }
-
       console.log('✅ Limit check completed:', result);
       return result;
       
@@ -171,18 +172,19 @@ export const useQueryLimits = () => {
         message: err.message || 'Error desconocido'
       };
       
-      // No cachear errores, pero marcar inicial como completado si es el primer intento
-      if (!initialCheckComplete) {
-        console.log('⚠️ Initial check completed with error - setting initialCheckComplete = true');
-        setInitialCheckComplete(true);
-      }
-      
+      // No cachear errores
       lastCheckResult = null;
       return errorResult;
       
     } finally {
       isChecking = false;
       setIsLoading(false);
+      
+      // ✅ CRÍTICO: Marcar como completado SIEMPRE, sin importar resultado
+      if (!initialCheckComplete) {
+        console.log('✅ Setting initialCheckComplete = true (first check completed)');
+        setInitialCheckComplete(true);
+      }
     }
   };
 

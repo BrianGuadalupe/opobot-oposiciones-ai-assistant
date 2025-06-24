@@ -20,7 +20,7 @@ export const useChat = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
-  const { checkQueryLimit, logQuery, waitUntilReady } = useQueryLimits();
+  const { checkQueryLimit, logQuery, waitUntilReady, initialCheckComplete } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
 
   const sendMessage = async (content: string) => {
@@ -29,6 +29,7 @@ export const useChat = () => {
     console.log('👤 Session present:', !!session);
     console.log('👤 User present:', !!user);
     console.log('✅ Subscription ready:', subscriptionReady);
+    console.log('🔍 Initial check complete:', initialCheckComplete);
     console.log('🔑 Access token present:', !!session?.access_token);
 
     // Verificaciones básicas de autenticación
@@ -56,6 +57,7 @@ export const useChat = () => {
     console.log('⏳ Waiting for limit system to be ready...');
     await waitUntilReady();
     console.log('✅ Limit system ready, continuing...');
+    console.log('🔍 Final initialCheckComplete status:', initialCheckComplete);
 
     setIsLoading(true);
     
