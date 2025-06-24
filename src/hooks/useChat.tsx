@@ -40,7 +40,6 @@ export const useChat = () => {
       return;
     }
 
-    // CLAVE: Esperar a que la suscripción esté lista antes de verificar límites
     if (!subscriptionReady) {
       console.log('⏳ Subscription not ready yet, cannot proceed with chat');
       toast({
@@ -57,7 +56,6 @@ export const useChat = () => {
       setIsLoading(true);
       console.log('⏳ About to call checkQueryLimit...');
       
-      // Verificar límite después de que la suscripción esté lista
       const limitCheck = await checkQueryLimit();
       
       console.log('✅ checkQueryLimit completed successfully');
@@ -78,31 +76,11 @@ export const useChat = () => {
         console.log('🚫 Reason:', limitCheck.reason);
         console.log('🚫 Message:', limitCheck.message);
         
-        if (limitCheck.reason === 'limit_reached') {
-          toast({
-            title: "🚫 Límite Alcanzado",
-            description: limitCheck.message || "Has alcanzado el límite de consultas mensuales",
-            variant: "destructive",
-          });
-        } else if (limitCheck.reason === 'no_subscription') {
-          toast({
-            title: "Suscripción Requerida",
-            description: limitCheck.message || "Necesitas una suscripción activa",
-            variant: "destructive",
-          });
-        } else if (limitCheck.reason === 'demo_limit_reached') {
-          toast({
-            title: "🚫 Demo Completado",
-            description: limitCheck.message || "Has alcanzado el límite de 3 consultas del Demo",
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Error",
-            description: limitCheck.message || "No se puede procesar la consulta",
-            variant: "destructive",
-          });
-        }
+        toast({
+          title: "🚫 Límite Alcanzado",
+          description: limitCheck.message || "Has alcanzado el límite de consultas",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -124,13 +102,9 @@ export const useChat = () => {
       }));
 
       console.log('🤖 About to call chat-opobot function...');
+      console.log('📚 Conversation history length:', conversationHistory.length);
       
-      // Add timeout to chat-opobot call
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('chat-opobot timeout after 30 seconds')), 30000);
-      });
-      
-      const chatPromise = supabase.functions.invoke('chat-opobot', {
+      const { data, error } = await supabase.functions.invoke('chat-opobot', {
         body: {
           message: content,
           conversationHistory
@@ -140,19 +114,28 @@ export const useChat = () => {
         },
       });
 
-      console.log('⏳ Starting chat-opobot call with 30s timeout...');
-      const { data, error } = await Promise.race([chatPromise, timeoutPromise]) as any;
-
       console.log('✅ Chat-opobot response received');
+      console.log('📥 Response data:', data);
+      console.log('❌ Response error:', error);
 
       if (error) {
         console.error('❌ Error from chat-opobot:', error);
-        throw error;
+        throw new Error(error.message || 'Error en la función de chat');
       }
 
-      if (!data?.success) {
-        console.error('❌ Chat-opobot returned unsuccessful response:', data?.error);
-        throw new Error(data?.error || 'Error desconocido');
+      if (!data) {
+        console.error('❌ No data received from chat-opobot');
+        throw new Error('No se recibió respuesta del servidor');
+      }
+
+      if (!data.success) {
+        console.error('❌ Chat-opobot returned unsuccessful response:', data.error);
+        throw new Error(data.error || 'Error desconocido en el chat');
+      }
+
+      if (!data.message) {
+        console.error('❌ No message in chat-opobot response');
+        throw new Error('Respuesta vacía del asistente');
       }
 
       const assistantMessage: ChatMessage = {
@@ -170,21 +153,14 @@ export const useChat = () => {
 
     } catch (error) {
       console.error('💥 Error in chat flow:', error);
+      console.error('💥 Error message:', error?.message);
+      console.error('💥 Error stack:', error?.stack);
       
-      if (error?.message?.includes('timeout')) {
-        console.error('⏰ TIMEOUT ERROR - chat took too long');
-        toast({
-          title: "Error de Tiempo",
-          description: "El chat tardó demasiado en responder. Intenta de nuevo.",
-          variant: "destructive",
-        });
-      } else {
-        toast({
-          title: "Error",
-          description: "No se pudo enviar el mensaje. Inténtalo de nuevo.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Error en el Chat",
+        description: error?.message || "No se pudo enviar el mensaje. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
 
       // Remover el mensaje del usuario en caso de error
       setMessages(prev => prev.slice(0, -1));
