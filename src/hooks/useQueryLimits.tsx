@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -40,12 +41,12 @@ export const useQueryLimits = () => {
     try {
       setIsLoading(true);
       
-      console.log('🔍 About to invoke manage-usage function for check_limit...');
+      console.log('🔍 Calling manage-usage for check_limit...');
       console.log('🔐 Using access token:', session.access_token ? 'EXISTS' : 'MISSING');
       
-      // Add timeout to the manage-usage call
+      // Ultra-aggressive timeout - 5 seconds max
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('manage-usage timeout after 10 seconds')), 10000);
+        setTimeout(() => reject(new Error('manage-usage timeout after 5 seconds')), 5000);
       });
       
       const callPromise = supabase.functions.invoke('manage-usage', {
@@ -55,18 +56,12 @@ export const useQueryLimits = () => {
         },
       });
 
-      console.log('⏳ Starting manage-usage call with 10s timeout...');
+      console.log('⏳ Starting manage-usage call with 5s timeout...');
       const { data, error } = await Promise.race([callPromise, timeoutPromise]) as any;
 
       console.log('📥 Manage-usage response received');
       console.log('📥 Response error:', error);
-      console.log('📥 Response data type:', typeof data);
-      console.log('📥 Response data is null/undefined:', data == null);
-      
-      if (data) {
-        console.log('📥 Response data keys:', Object.keys(data));
-        console.log('📥 Raw response data:', JSON.stringify(data, null, 2));
-      }
+      console.log('📥 Response data:', data);
 
       if (error) {
         console.error('❌ Error in manage-usage function:', error);
@@ -75,24 +70,20 @@ export const useQueryLimits = () => {
 
       // Verificar que la respuesta tenga la estructura esperada
       if (!data || typeof data !== 'object') {
-        console.error('❌ Invalid response structure from manage-usage - not an object:', data);
+        console.error('❌ Invalid response structure:', data);
         throw new Error('Respuesta inválida del servidor');
       }
 
       if (typeof data.canProceed === 'undefined') {
-        console.error('❌ Missing canProceed property in response:', data);
-        throw new Error('Respuesta inválida del servidor - falta canProceed');
+        console.error('❌ Missing canProceed property:', data);
+        throw new Error('Respuesta inválida del servidor');
       }
 
       console.log('✅ Valid response structure confirmed');
-      console.log('✅ canProceed raw value:', data.canProceed);
-      console.log('✅ canProceed type:', typeof data.canProceed);
+      console.log('✅ canProceed:', data.canProceed);
       console.log('✅ reason:', data.reason);
 
-      // Asegurar que canProceed es explícitamente boolean
       const canProceed = Boolean(data.canProceed);
-      console.log('✅ canProceed converted to boolean:', canProceed);
-
       const result: LimitCheckResult = {
         canProceed: canProceed,
         reason: data.reason || 'unknown',
@@ -100,7 +91,7 @@ export const useQueryLimits = () => {
         usageData: data.usageData
       };
       
-      console.log('✅ Processed result:', JSON.stringify(result, null, 2));
+      console.log('✅ Processed result:', result);
       
       if (result.usageData) {
         setUsageData(result.usageData);
@@ -116,14 +107,6 @@ export const useQueryLimits = () => {
         });
       }
 
-      if (result.reason === 'demo_limit_reached') {
-        toast({
-          title: "🚫 Demo Completado",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-
       if (result.reason === 'warning_90') {
         toast({
           title: "⚠️ Límite de Consultas",
@@ -132,27 +115,17 @@ export const useQueryLimits = () => {
         });
       }
 
-      if (result.reason === 'limit_reached') {
-        toast({
-          title: "🚫 Límite Alcanzado",
-          description: result.message,
-          variant: "destructive",
-        });
-      }
-
-      console.log('✅ Limit check completed successfully, returning result');
-      console.log('✅ Final canProceed value being returned:', result.canProceed);
+      console.log('✅ Limit check completed successfully');
       return result;
     } catch (error) {
       console.error('💥 Error checking query limit:', error);
       console.error('💥 Error message:', error?.message);
-      console.error('💥 Error stack:', error?.stack);
       
       if (error?.message?.includes('timeout')) {
         console.error('⏰ TIMEOUT ERROR - manage-usage took too long');
         toast({
           title: "Error de Tiempo",
-          description: "La verificación de límites tardó demasiado. Intenta de nuevo.",
+          description: "La verificación tardó demasiado. Intenta de nuevo.",
           variant: "destructive",
         });
       }
@@ -221,10 +194,10 @@ export const useQueryLimits = () => {
       
       if (data) {
         const newUsageData = {
-          queriesUsed: data.queries_this_month,
-          queriesRemaining: data.queries_remaining_this_month,
-          usagePercentage: data.usage_percentage,
-          monthlyLimit: data.queries_this_month + data.queries_remaining_this_month
+          queriesUsed: data.queries_this_month || 0,
+          queriesRemaining: data.queries_remaining_this_month || 0,
+          usagePercentage: data.usage_percentage || 0,
+          monthlyLimit: (data.queries_this_month || 0) + (data.queries_remaining_this_month || 0)
         };
         console.log('📊 Loaded usage data:', newUsageData);
         setUsageData(newUsageData);

@@ -15,9 +15,9 @@ export const useSubscription = () => {
     loading: true,
   });
   const [isChecking, setIsChecking] = useState(false);
-  const [isReady, setIsReady] = useState(false); // Nuevo estado para indicar que ya terminó el primer check
+  const [isReady, setIsReady] = useState(false);
   
-  // Use refs to track the last successful check and prevent unnecessary re-checks
+  // Use refs to prevent unnecessary re-checks and race conditions
   const lastCheckTimeRef = useRef<number>(0);
   const lastUserIdRef = useRef<string | null>(null);
   const hasValidCheckRef = useRef<boolean>(false);
@@ -26,41 +26,35 @@ export const useSubscription = () => {
   const checkSubscription = useCallback(async (forceRefresh: boolean = false) => {
     console.log('=== SUBSCRIPTION CHECK START ===');
     console.log('Force refresh:', forceRefresh);
-    console.log('Is checking:', isChecking);
     console.log('User:', !!user);
     console.log('Session:', !!session);
-    console.log('Has valid check:', hasValidCheckRef.current);
-    console.log('Has initial check completed:', hasInitialCheckCompletedRef.current);
+    console.log('Is checking:', isChecking);
 
-    // Si ya tenemos un check válido y no es forzado, no hacer nada
-    if (!forceRefresh && hasValidCheckRef.current && lastUserIdRef.current === user?.id && !isChecking) {
-      console.log('Subscription check skipped - already have valid result for this user');
+    // Prevent multiple simultaneous checks
+    if (isChecking) {
+      console.log('Already checking subscription, skipping');
+      return;
+    }
+
+    // Use cached result if valid and not forced
+    if (!forceRefresh && hasValidCheckRef.current && lastUserIdRef.current === user?.id) {
+      console.log('Using cached subscription result');
       if (!isReady && hasInitialCheckCompletedRef.current) {
         setIsReady(true);
       }
       return;
     }
 
-    // Prevent multiple simultaneous checks
-    if (isChecking) {
-      console.log('Subscription check already in progress, skipping');
-      return;
-    }
-
     // Rate limiting - avoid checks more frequent than 2 seconds unless forced
     const now = Date.now();
     if (!forceRefresh && (now - lastCheckTimeRef.current) < 2000) {
-      console.log('Subscription check skipped - rate limited');
+      console.log('Rate limited - skipping check');
       return;
     }
 
     // Wait for complete auth session
     if (!user || !session?.access_token) {
-      console.log('Subscription check: Waiting for complete auth session');
-      console.log('User exists:', !!user);
-      console.log('Session exists:', !!session);
-      console.log('Access token exists:', !!session?.access_token);
-      
+      console.log('Waiting for complete auth session');
       setSubscriptionStatus({
         subscribed: false,
         loading: false,
@@ -76,16 +70,16 @@ export const useSubscription = () => {
       lastCheckTimeRef.current = now;
       lastUserIdRef.current = user.id;
       
-      // Solo mostrar loading en el primer check
+      // Only show loading on first check
       if (!hasInitialCheckCompletedRef.current) {
         setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       }
       
       console.log('Fetching subscription data from Stripe...');
       
-      // Timeout de 8 segundos
+      // Aggressive timeout - 5 seconds max
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Subscription check timeout')), 8000);
+        setTimeout(() => reject(new Error('Subscription check timeout')), 5000);
       });
       
       const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
@@ -95,7 +89,7 @@ export const useSubscription = () => {
       console.log('Subscription data received:', data);
 
       const newStatus = {
-        subscribed: data.subscribed,
+        subscribed: Boolean(data.subscribed),
         subscription_tier: data.subscription_tier,
         subscription_end: data.subscription_end,
         loading: false,
@@ -113,7 +107,7 @@ export const useSubscription = () => {
       
       // Handle timeout with demo user fallback
       if (error instanceof Error && error.message.includes('timeout')) {
-        console.log('Timeout detected, checking demo user status as fallback...');
+        console.log('Timeout detected, checking demo user status...');
         try {
           const { data: usageData, error: usageError } = await supabase
             .from('user_usage')
@@ -122,7 +116,7 @@ export const useSubscription = () => {
             .single();
 
           if (!usageError && usageData?.is_demo_user) {
-            console.log('Demo user detected during timeout, setting demo status');
+            console.log('Demo user detected, setting demo status');
             const demoStatus = {
               subscribed: usageData.queries_remaining_this_month > 0,
               subscription_tier: 'Demo',
@@ -153,12 +147,9 @@ export const useSubscription = () => {
     }
   }, [user?.id, session?.access_token, isChecking]);
 
-  // Función principal de redirección a Stripe Checkout
   const redirectToStripeCheckout = async (planName: string) => {
     console.log('=== STRIPE CHECKOUT REDIRECT START ===');
     console.log('Plan:', planName);
-    console.log('User:', !!user);
-    console.log('Session:', !!session?.access_token);
     
     if (!user || !session?.access_token) {
       console.log('❌ No user session for checkout');
@@ -185,11 +176,8 @@ export const useSubscription = () => {
     }
   };
 
-  // Customer portal mejorado
   const openCustomerPortal = async () => {
     console.log('=== CUSTOMER PORTAL START ===');
-    console.log('User:', !!user);
-    console.log('Session:', !!session?.access_token);
     
     if (!user || !session?.access_token) {
       console.log('❌ No user session for customer portal');
@@ -208,7 +196,6 @@ export const useSubscription = () => {
       
       console.log('✅ Customer portal URL received:', url);
       
-      // Abrir en nueva pestaña
       window.open(url, '_blank', 'noopener,noreferrer');
       
       toast({
@@ -223,7 +210,7 @@ export const useSubscription = () => {
     }
   };
 
-  // Optimized effect - only run subscription check when truly necessary
+  // Optimized effect - only run when necessary
   useEffect(() => {
     // Reset cache when user changes
     if (user?.id !== lastUserIdRef.current) {
@@ -234,19 +221,19 @@ export const useSubscription = () => {
       lastCheckTimeRef.current = 0;
     }
 
-    // Only check if we have a complete auth session and haven't completed initial check
+    // Only check if we have complete auth and haven't completed initial check
     if (user && session?.access_token && !hasInitialCheckCompletedRef.current && !isChecking) {
       console.log('Auth complete, scheduling initial subscription check...');
       
       const timeoutId = setTimeout(() => {
         checkSubscription(false);
-      }, 300); // Pequeño delay para evitar race conditions
+      }, 100); // Minimal delay to avoid race conditions
 
       return () => clearTimeout(timeoutId);
     }
   }, [user?.id, session?.access_token, checkSubscription, isChecking]);
 
-  // Clear cache when auth state is lost
+  // Clear cache when auth is lost
   useEffect(() => {
     if (!user || !session) {
       console.log('Auth lost, clearing subscription cache');
@@ -260,7 +247,7 @@ export const useSubscription = () => {
 
   return {
     ...subscriptionStatus,
-    isReady, // Nuevo campo para indicar que el check inicial está completo
+    isReady,
     checkSubscription,
     redirectToStripeCheckout,
     openCustomerPortal,
