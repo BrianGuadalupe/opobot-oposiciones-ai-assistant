@@ -11,7 +11,6 @@ serve(async (req) => {
   console.log('🚀 CHAT-OPOBOT START - Request received');
   console.log('📥 Method:', req.method);
   console.log('📥 URL:', req.url);
-  console.log('📥 Headers:', Object.fromEntries(req.headers.entries()));
   
   if (req.method === 'OPTIONS') {
     console.log('✅ OPTIONS request handled');
@@ -20,6 +19,31 @@ serve(async (req) => {
 
   try {
     console.log('📥 Processing chat request...');
+    
+    // Leer body de la request PRIMERO (solo una vez)
+    let requestBody;
+    try {
+      requestBody = await req.json();
+      console.log('📝 Request body received:', {
+        hasMessage: !!requestBody.message,
+        messageLength: requestBody.message?.length || 0,
+        hasHistory: !!requestBody.conversationHistory,
+        historyLength: requestBody.conversationHistory?.length || 0
+      });
+    } catch (error) {
+      console.error('❌ Error parsing request body:', error);
+      throw new Error('Invalid request body');
+    }
+
+    const { message, conversationHistory } = requestBody;
+    
+    if (!message) {
+      console.error('❌ No message provided');
+      throw new Error('Message is required');
+    }
+
+    console.log('📝 Message received:', message.substring(0, 50) + '...');
+    console.log('📚 History length:', conversationHistory?.length || 0);
     
     // Verificar API key de OpenAI
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -137,31 +161,6 @@ serve(async (req) => {
     }
 
     console.log('✅ Usage limits verified, proceeding with chat...');
-
-    // Leer body de la request
-    let requestBody;
-    try {
-      requestBody = await req.json();
-      console.log('📝 Request body received:', {
-        hasMessage: !!requestBody.message,
-        messageLength: requestBody.message?.length || 0,
-        hasHistory: !!requestBody.conversationHistory,
-        historyLength: requestBody.conversationHistory?.length || 0
-      });
-    } catch (error) {
-      console.error('❌ Error parsing request body:', error);
-      throw new Error('Invalid request body');
-    }
-
-    const { message, conversationHistory } = requestBody;
-    
-    if (!message) {
-      console.error('❌ No message provided');
-      throw new Error('Message is required');
-    }
-
-    console.log('📝 Message received:', message.substring(0, 50) + '...');
-    console.log('📚 History length:', conversationHistory?.length || 0);
 
     const systemPrompt = `
 Eres Opobot, tutor virtual especializado en la oposición de Auxiliar Administrativo del Estado de España.
