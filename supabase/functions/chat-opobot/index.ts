@@ -1,3 +1,4 @@
+
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
@@ -178,81 +179,128 @@ Usa un tono profesional pero cercano, y estructura tu respuesta con puntos claro
 
     console.log('🤖 Calling OpenAI API...');
     console.log('🤖 Messages count:', messages.length);
-    
-    const startTime = Date.now();
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openAIApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
+    console.log('🤖 Request body size:', JSON.stringify({
         model: 'gpt-4o-mini',
         messages: messages,
         temperature: 0.7,
         max_tokens: 1000,
-      }),
-    });
-
-    const responseTime = Date.now() - startTime;
-    console.log('📡 OpenAI response received in', responseTime, 'ms');
-    console.log('📡 OpenAI response status:', response.status);
+    }).length, 'bytes');
     
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('❌ OpenAI API error:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
+    const startTime = Date.now();
+    console.log('⏰ Starting OpenAI API call at:', new Date().toISOString());
+    
+    // Crear un AbortController para manejar timeouts
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      console.log('⏰ Timeout reached, aborting OpenAI call');
+      controller.abort();
+    }, 25000); // 25 segundos de timeout
+    
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openAIApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1000,
+        }),
+        signal: controller.signal,
       });
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+
+      clearTimeout(timeoutId);
+      const responseTime = Date.now() - startTime;
+      console.log('📡 OpenAI response received in', responseTime, 'ms');
+      console.log('📡 OpenAI response status:', response.status);
+      console.log('📡 OpenAI response headers:', Object.fromEntries(response.headers.entries()));
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ OpenAI API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        });
+        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ OpenAI response received successfully');
+      console.log('📊 Response data structure:', {
+        hasChoices: !!data.choices,
+        choicesLength: data.choices?.length || 0,
+        hasFirstChoice: !!data.choices?.[0],
+        hasMessage: !!data.choices?.[0]?.message,
+        hasContent: !!data.choices?.[0]?.message?.content
+      });
+      
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        console.error('❌ Invalid OpenAI response structure:', data);
+        throw new Error('Invalid response from OpenAI');
+      }
+
+      const assistantMessage = data.choices[0].message.content;
+      console.log('📝 Assistant message length:', assistantMessage?.length || 0);
+      
+      // Actualizar uso después de procesar la consulta exitosamente
+      console.log('📊 Updating usage after successful query...');
+      await supabase.from('user_usage').update({
+        queries_this_month: supabase.sql`queries_this_month + 1`,
+        queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
+        total_queries: supabase.sql`total_queries + 1`,
+        updated_at: new Date().toISOString()
+      }).eq('user_id', user.id);
+
+      // Registrar la consulta en el log
+      await supabase.from('query_logs').insert({
+        user_id: user.id,
+        query_text: message,
+        response_length: assistantMessage.length
+      });
+
+      const result = { 
+        message: assistantMessage,
+        success: true 
+      };
+      
+      console.log('✅ Returning successful response');
+      console.log('✅ Total processing time:', Date.now() - startTime, 'ms');
+      
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+
+    } catch (error) {
+      console.error('💥 Error in OpenAI API call:', error);
+      console.error('💥 Error message:', error.message);
+      
+      if (error.name === 'AbortError') {
+        console.error('⏰ OpenAI API call timed out');
+        return new Response(JSON.stringify({ 
+          error: "La respuesta está tardando demasiado. Por favor, intenta de nuevo.",
+          success: false 
+        }), {
+          status: 408,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      
+      const errorResponse = { 
+        error: error.message || 'Error en la API de OpenAI',
+        success: false 
+      };
+      
+      console.log('❌ Returning error response:', errorResponse);
+      
+      return new Response(JSON.stringify(errorResponse), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
-
-    const data = await response.json();
-    console.log('✅ OpenAI response received successfully');
-    console.log('📊 Response data structure:', {
-      hasChoices: !!data.choices,
-      choicesLength: data.choices?.length || 0,
-      hasFirstChoice: !!data.choices?.[0],
-      hasMessage: !!data.choices?.[0]?.message,
-      hasContent: !!data.choices?.[0]?.message?.content
-    });
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      console.error('❌ Invalid OpenAI response structure:', data);
-      throw new Error('Invalid response from OpenAI');
-    }
-
-    const assistantMessage = data.choices[0].message.content;
-    console.log('📝 Assistant message length:', assistantMessage?.length || 0);
-    
-    // Actualizar uso después de procesar la consulta exitosamente
-    console.log('📊 Updating usage after successful query...');
-    await supabase.from('user_usage').update({
-      queries_this_month: supabase.sql`queries_this_month + 1`,
-      queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
-      total_queries: supabase.sql`total_queries + 1`,
-      updated_at: new Date().toISOString()
-    }).eq('user_id', user.id);
-
-    // Registrar la consulta en el log
-    await supabase.from('query_logs').insert({
-      user_id: user.id,
-      query_text: message,
-      response_length: assistantMessage.length
-    });
-
-    const result = { 
-      message: assistantMessage,
-      success: true 
-    };
-    
-    console.log('✅ Returning successful response');
-    console.log('✅ Total processing time:', Date.now() - startTime, 'ms');
-    
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
 
   } catch (error) {
     console.error('💥 Error in chat-opobot function:', error);
