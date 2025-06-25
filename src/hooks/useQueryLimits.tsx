@@ -1,5 +1,4 @@
-
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -18,81 +17,51 @@ interface LimitCheckResult {
   usageData?: UsageData;
 }
 
-// Control de concurrencia fuera del hook para evitar múltiples llamadas
-let isChecking = false;
-let lastCheckResult: LimitCheckResult | null = null;
-let lastCheckTime = 0;
-const CACHE_DURATION = 3000; // 3 segundos de caché
+const CACHE_DURATION = 30000; // 30 segundos
 
 export const useQueryLimits = () => {
-  const { session, user } = useAuth();
-  const { toast } = useToast();
-
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const { session, user } = useAuth();
+  const { toast } = useToast();
+
+  let lastCheckResult: LimitCheckResult | null = null;
+  let lastCheckTime = 0;
+  let isChecking = false;
 
   const fetchFromManageUsage = async (action: string, body: any = {}): Promise<any> => {
-    if (!session) throw new Error('No session');
+    if (!session?.access_token) {
+      throw new Error('No access token available');
+    }
 
     console.log(`🔄 Calling manage-usage with action: ${action}`);
     
-    const { data, error } = await supabase.functions.invoke('manage-usage', {
-      body: { action, ...body },
-      headers: { Authorization: `Bearer ${session.access_token}` },
+    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/manage-usage`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action, ...body }),
     });
 
-    if (error) {
-      console.error('❌ manage-usage error:', error);
-      throw error;
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ manage-usage error: ${response.status} - ${errorText}`);
+      throw new Error(`manage-usage error: ${response.status} - ${errorText}`);
     }
-    
+
+    const data = await response.json();
     console.log(`✅ manage-usage ${action} response:`, data);
     return data;
-  };
-
-  const waitUntilReady = async (): Promise<void> => {
-    console.log('⏳ waitUntilReady called, initialCheckComplete:', initialCheckComplete);
-    
-    if (initialCheckComplete) {
-      console.log('✅ Already ready, returning immediately');
-      return;
-    }
-    
-    console.log('⏳ Waiting for initial check to complete...');
-    const startTime = Date.now();
-    
-    return new Promise((resolve) => {
-      const checkReady = () => {
-        console.log('🔍 Checking if ready... initialCheckComplete:', initialCheckComplete);
-        if (initialCheckComplete) {
-          console.log('✅ Ready! Resolving waitUntilReady');
-          resolve();
-          return;
-        }
-        
-        // Timeout de seguridad después de 10 segundos
-        if (Date.now() - startTime > 10000) {
-          console.warn('⚠️ waitUntilReady timeout after 10 seconds, resolving anyway');
-          resolve();
-          return;
-        }
-        
-        // Continuar verificando cada 200ms
-        setTimeout(checkReady, 200);
-      };
-      
-      checkReady();
-    });
   };
 
   const checkQueryLimit = async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
     console.log('=== CHECK QUERY LIMIT START ===');
     console.log('🔍 Force refresh:', forceRefresh);
-    console.log('🔍 Initial check complete:', initialCheckComplete);
-    console.log('🔍 Is loading:', isLoading);
     console.log('🔍 User/session present:', !!user, !!session);
-    
+
     if (!user || !session) {
       console.log('❌ No user or session for limit check');
       const result = { 
@@ -100,45 +69,34 @@ export const useQueryLimits = () => {
         reason: 'no_auth', 
         message: 'Debes iniciar sesión para usar el chat' 
       };
-      // Marcar como completado incluso sin auth para evitar bucles
       if (!initialCheckComplete) {
-        console.log('✅ Setting initialCheckComplete = true (no auth case)');
         setInitialCheckComplete(true);
       }
       return result;
     }
 
-    // Control de concurrencia - pero permitir si es forzado
+    // Control de concurrencia
     if (isChecking && !forceRefresh) {
-      console.log('⚠️ Limit check already in progress, using cached or waiting state');
-      
-      // Si tenemos caché válido, usarlo
-      if (lastCheckResult && initialCheckComplete) {
-        console.log('📋 Using cached result while checking');
-        return lastCheckResult;
-      }
-      
-      // Si no hay caché válido, devolver estado de espera
-      return {
+      console.log('⚠️ Limit check already in progress, using cached result');
+      return lastCheckResult || {
         canProceed: false,
         reason: 'checking_in_progress',
         message: 'Verificando límites, espera un momento...',
       };
     }
 
-    // Verificar caché solo si el check inicial está completo
+    // Verificar caché
     const now = Date.now();
-    if (!forceRefresh && lastCheckResult && initialCheckComplete && (now - lastCheckTime) < CACHE_DURATION) {
-      console.log('📋 Using cached limit check result (initial complete)');
+    if (!forceRefresh && lastCheckResult && (now - lastCheckTime) < CACHE_DURATION) {
+      console.log('📋 Using cached limit check result');
       return lastCheckResult;
     }
 
-    console.log('🔍 Starting actual limit check process...');
+    console.log('🔍 Starting fresh limit check...');
     isChecking = true;
     setIsLoading(true);
     
     try {
-      console.log('🔍 Performing fresh limit check...');
       const data = await fetchFromManageUsage('check_limit');
       console.log('✅ manage-usage responded with:', data);
 
@@ -154,7 +112,6 @@ export const useQueryLimits = () => {
       lastCheckTime = now;
 
       if (result.usageData) {
-        console.log('📊 Updating usage data:', result.usageData);
         setUsageData(result.usageData);
       }
 
@@ -163,11 +120,6 @@ export const useQueryLimits = () => {
       
     } catch (err: any) {
       console.error('❌ Error in checkQueryLimit:', err);
-      toast({ 
-        title: 'Error', 
-        description: `Error al verificar límites: ${err.message || 'desconocido'}`, 
-        variant: 'destructive' 
-      });
       
       const errorResult: LimitCheckResult = {
         canProceed: false,
@@ -175,24 +127,16 @@ export const useQueryLimits = () => {
         message: err.message || 'Error desconocido'
       };
       
-      // No cachear errores
       lastCheckResult = null;
-      console.log('❌ Error result:', errorResult);
       return errorResult;
       
     } finally {
-      console.log('🔄 Entering finally block...');
       isChecking = false;
       setIsLoading(false);
       
-      // ✅ CRÍTICO: Marcar como completado SIEMPRE, sin importar resultado
       if (!initialCheckComplete) {
-        console.log('✅ Setting initialCheckComplete = true (first check completed)');
         setInitialCheckComplete(true);
-      } else {
-        console.log('✅ initialCheckComplete was already true');
       }
-      console.log('🔄 Finally block completed');
     }
   };
 
@@ -203,7 +147,7 @@ export const useQueryLimits = () => {
       console.log('📝 Logging query usage...');
       await fetchFromManageUsage('log_query', { queryText, responseLength });
       
-      // Invalidar caché después de log para que el próximo check sea fresh
+      // Invalidar caché después de log
       lastCheckResult = null;
       lastCheckTime = 0;
       
@@ -215,8 +159,7 @@ export const useQueryLimits = () => {
   const loadUsageData = async () => {
     try {
       console.log('📊 Loading initial usage data...');
-      const result = await checkQueryLimit(true); // Forzar refresh en carga inicial
-      console.log('📊 Initial usage data loaded:', result);
+      const result = await checkQueryLimit(true);
       if (result.usageData) {
         setUsageData(result.usageData);
       }
@@ -239,6 +182,5 @@ export const useQueryLimits = () => {
     checkQueryLimit,
     logQuery,
     loadUsageData,
-    waitUntilReady,
   };
 };

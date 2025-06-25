@@ -40,13 +40,15 @@ serve(async (req) => {
     const user = userData.user;
 
     if (action === 'check_limit') {
-      const { data: usageData, error: usageError } = await supabase
+      let { data: usageData, error: usageError } = await supabase
         .from('user_usage')
         .select('*')
         .eq('user_id', user.id)
         .maybeSingle();
 
       if (!usageData) {
+        console.log('📝 Creating new user_usage record for user:', user.id);
+        
         const { data: subData } = await supabase
           .from('subscribers')
           .select('*')
@@ -54,8 +56,14 @@ serve(async (req) => {
           .maybeSingle();
 
         const limit = subData?.subscribed ? getSubscriptionLimit(subData.subscription_tier) : 0;
+        
+        console.log('📊 User subscription data:', {
+          subscribed: subData?.subscribed,
+          tier: subData?.subscription_tier,
+          limit: limit
+        });
 
-        const { data: newUsage } = await supabase
+        const { data: newUsage, error: insertError } = await supabase
           .from('user_usage')
           .insert({
             user_id: user.id,
@@ -63,53 +71,90 @@ serve(async (req) => {
             is_active: subData?.subscribed || false,
             subscription_tier: subData?.subscription_tier || null,
             queries_remaining_this_month: limit,
+            queries_this_month: 0,
+            total_queries: 0,
+            usage_percentage: 0,
             is_demo_user: false
           })
           .select()
           .single();
 
-        return new Response(JSON.stringify({
-          canProceed: limit > 0,
-          reason: limit > 0 ? "ok" : "no_subscription",
-          message: limit > 0 ? "Consulta permitida" : "No tienes una suscripción activa",
-          usageData: {
-            queriesUsed: 0,
-            queriesRemaining: limit,
-            usagePercentage: 0,
-            monthlyLimit: limit
-          }
-        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        if (insertError) {
+          console.error('❌ Error creating user_usage record:', insertError);
+          return new Response(JSON.stringify({ 
+            error: "Error creating usage record",
+            details: insertError.message 
+          }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        usageData = newUsage;
+        console.log('✅ Created user_usage record:', usageData);
       }
 
-      return new Response(JSON.stringify({
-        canProceed: usageData.queries_remaining_this_month > 0,
-        reason: usageData.queries_remaining_this_month > 0 ? "ok" : "limit_exceeded",
-        message: usageData.queries_remaining_this_month > 0
-          ? "Consulta permitida"
-          : "Has alcanzado tu límite mensual",
+      const canProceed = usageData.queries_remaining_this_month > 0;
+      const reason = canProceed ? "ok" : "limit_exceeded";
+      const message = canProceed 
+        ? "Consulta permitida" 
+        : "Has alcanzado tu límite de consultas para este período";
+
+      const response = {
+        canProceed,
+        reason,
+        message,
         usageData: {
-          queriesUsed: usageData.queries_this_month,
-          queriesRemaining: usageData.queries_remaining_this_month,
-          usagePercentage: usageData.usage_percentage,
+          queriesUsed: usageData.queries_this_month || 0,
+          queriesRemaining: usageData.queries_remaining_this_month || 0,
+          usagePercentage: usageData.usage_percentage || 0,
           monthlyLimit: getSubscriptionLimit(usageData.subscription_tier || "")
         }
-      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      };
+
+      console.log('📊 Returning usage check result:', response);
+      return new Response(JSON.stringify(response), { 
+        headers: { ...corsHeaders, "Content-Type": "application/json" } 
+      });
     }
 
     if (action === 'log_query') {
-      await supabase.from('user_usage').update({
-        queries_this_month: supabase.sql`queries_this_month + 1`,
-        queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
-        total_queries: supabase.sql`total_queries + 1`,
-        updated_at: new Date().toISOString()
-      }).eq('user_id', user.id);
+      console.log('📝 Logging query for user:', user.id);
+      
+      const { error: updateError } = await supabase
+        .from('user_usage')
+        .update({
+          queries_this_month: supabase.sql`queries_this_month + 1`,
+          queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
+          total_queries: supabase.sql`total_queries + 1`,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
 
-      await supabase.from('query_logs').insert({
-        user_id: user.id,
-        query_text: queryText,
-        response_length: responseLength
-      });
+      if (updateError) {
+        console.error('❌ Error updating usage:', updateError);
+        return new Response(JSON.stringify({ 
+          error: "Error updating usage",
+          details: updateError.message 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
+      const { error: logError } = await supabase
+        .from('query_logs')
+        .insert({
+          user_id: user.id,
+          query_text: queryText,
+          response_length: responseLength
+        });
+
+      if (logError) {
+        console.error('❌ Error logging query:', logError);
+      }
+
+      console.log('✅ Query logged successfully');
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -120,7 +165,11 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: error.message || "Internal server error" }), {
+    console.error('💥 Error in manage-usage:', error);
+    return new Response(JSON.stringify({ 
+      error: error.message || "Internal server error",
+      stack: error.stack 
+    }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
