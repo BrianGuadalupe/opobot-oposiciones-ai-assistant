@@ -1,6 +1,6 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -28,6 +28,115 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured');
     }
     console.log('✅ OpenAI API key found');
+
+    // Verificar autenticación del usuario
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error('❌ No authorization header provided');
+      return new Response(JSON.stringify({ 
+        error: "Authentication required",
+        success: false 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL") || "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
+      { auth: { persistSession: false } }
+    );
+
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !userData.user) {
+      console.error('❌ Authentication failed:', userError);
+      return new Response(JSON.stringify({ 
+        error: "Authentication failed",
+        success: false 
+      }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const user = userData.user;
+    console.log('✅ User authenticated:', user.id);
+
+    // Verificar límites de uso antes de procesar
+    console.log('🔍 Checking usage limits...');
+    const { data: usageData, error: usageError } = await supabase
+      .from('user_usage')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (usageError) {
+      console.error('❌ Error checking usage:', usageError);
+      throw new Error('Error checking usage limits');
+    }
+
+    // Si no existe registro de uso, verificar suscripción
+    if (!usageData) {
+      console.log('📝 No usage data found, checking subscription...');
+      const { data: subData } = await supabase
+        .from('subscribers')
+        .select('*')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (!subData?.subscribed) {
+        console.error('❌ User not subscribed');
+        return new Response(JSON.stringify({ 
+          error: "No tienes una suscripción activa. Suscríbete para usar Opobot.",
+          success: false 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Crear registro de uso inicial
+      const limit = getSubscriptionLimit(subData.subscription_tier);
+      const { data: newUsage } = await supabase
+        .from('user_usage')
+        .insert({
+          user_id: user.id,
+          email: user.email || subData.email,
+          is_active: true,
+          subscription_tier: subData.subscription_tier,
+          queries_remaining_this_month: limit,
+          is_demo_user: false
+        })
+        .select()
+        .single();
+
+      if (newUsage.queries_remaining_this_month <= 0) {
+        console.error('❌ No queries remaining');
+        return new Response(JSON.stringify({ 
+          error: "Has alcanzado tu límite de consultas para este período. Renueva tu suscripción para continuar.",
+          success: false 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } else {
+      // Verificar si tiene consultas restantes
+      if (usageData.queries_remaining_this_month <= 0) {
+        console.error('❌ No queries remaining for user');
+        return new Response(JSON.stringify({ 
+          error: "Has alcanzado tu límite de consultas para este período. Renueva tu suscripción para continuar.",
+          success: false 
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    }
+
+    console.log('✅ Usage limits verified, proceeding with chat...');
 
     // Leer body de la request
     let requestBody;
@@ -118,6 +227,22 @@ Usa un tono profesional pero cercano, y estructura tu respuesta con puntos claro
     const assistantMessage = data.choices[0].message.content;
     console.log('📝 Assistant message length:', assistantMessage?.length || 0);
     
+    // Actualizar uso después de procesar la consulta exitosamente
+    console.log('📊 Updating usage after successful query...');
+    await supabase.from('user_usage').update({
+      queries_this_month: supabase.sql`queries_this_month + 1`,
+      queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
+      total_queries: supabase.sql`total_queries + 1`,
+      updated_at: new Date().toISOString()
+    }).eq('user_id', user.id);
+
+    // Registrar la consulta en el log
+    await supabase.from('query_logs').insert({
+      user_id: user.id,
+      query_text: message,
+      response_length: assistantMessage.length
+    });
+
     const result = { 
       message: assistantMessage,
       success: true 
@@ -148,3 +273,14 @@ Usa un tono profesional pero cercano, y estructura tu respuesta con puntos claro
     });
   }
 });
+
+// Función auxiliar para obtener límites de suscripción
+function getSubscriptionLimit(tier: string): number {
+  const limits = {
+    'Demo': 3,
+    'Básico': 100,
+    'Profesional': 3000,
+    'Academias': 30000
+  };
+  return limits[tier] || 0;
+}

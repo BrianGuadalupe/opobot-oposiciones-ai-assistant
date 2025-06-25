@@ -1,4 +1,3 @@
-
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -133,7 +132,7 @@ function getSubscriptionLimit(tier: string): number {
     'Demo': 3,
     'Básico': 100,
     'Profesional': 3000,
-    'Academias': 10000
+    'Academias': 30000
   };
   return limits[tier] || 0;
 }

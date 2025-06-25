@@ -1,4 +1,3 @@
-
 -- Función para sincronizar datos de subscriber con user_usage
 CREATE OR REPLACE FUNCTION sync_subscriber_to_user_usage()
 RETURNS TRIGGER AS $$
@@ -75,3 +74,17 @@ FROM public.subscribers s
 WHERE NOT EXISTS (
   SELECT 1 FROM public.user_usage u WHERE u.user_id = s.user_id
 );
+
+-- Actualizar la función get_plan_limit con los nuevos límites por período de suscripción
+CREATE OR REPLACE FUNCTION get_plan_limit(plan_tier TEXT)
+RETURNS INTEGER AS $$
+BEGIN
+  CASE plan_tier
+    WHEN 'Demo' THEN RETURN 3;
+    WHEN 'Básico' THEN RETURN 100;
+    WHEN 'Profesional' THEN RETURN 3000;
+    WHEN 'Academias' THEN RETURN 30000;
+    ELSE RETURN 0;
+  END CASE;
+END;
+$$ LANGUAGE plpgsql;

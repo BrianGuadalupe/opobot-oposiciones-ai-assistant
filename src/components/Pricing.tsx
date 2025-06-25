@@ -1,4 +1,3 @@
-
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle, Star, ExternalLink, Settings } from "lucide-react";
@@ -22,7 +21,7 @@ const Pricing = () => {
       period: "mes",
       description: "Perfecto para empezar",
       features: [
-        "100 consultas mensuales",
+        "100 consultas por período de suscripción",
         "Acceso a temarios básicos",
         "Soporte por email",
         "Tests automáticos"
@@ -35,7 +34,7 @@ const Pricing = () => {
       period: "mes",
       description: "Para estudiantes serios",
       features: [
-        "Consultas ilimitadas",
+        "3.000 consultas por período de suscripción",
         "Todos los temarios actualizados",
         "Soporte prioritario",
         "Tests personalizados",
@@ -50,6 +49,7 @@ const Pricing = () => {
       period: "mes",
       description: "Solución para centros",
       features: [
+        "30.000 consultas por período de suscripción",
         "Hasta 50 estudiantes",
         "Panel de administración",
         "Estadísticas detalladas", 
