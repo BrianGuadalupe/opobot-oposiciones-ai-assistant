@@ -47,7 +47,7 @@ serve(async (req) => {
         .maybeSingle();
 
       if (!usageData) {
-        console.log('📝 Creating new user_usage record for user:', user.id);
+        console.log('🔄 Creating new user_usage record for user:', user.id);
         
         const { data: subData } = await supabase
           .from('subscribers')

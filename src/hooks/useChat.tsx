@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,7 +19,7 @@ export const useChat = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
-  const { checkQueryLimit, logQuery, waitUntilReady, initialCheckComplete } = useQueryLimits();
+  const { checkQueryLimit, logQuery, initialCheckComplete } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
 
   const sendMessage = async (content: string) => {
@@ -54,10 +53,18 @@ export const useChat = () => {
       return;
     }
 
-    console.log('⏳ Waiting for limit system to be ready...');
-    await waitUntilReady();
-    console.log('✅ Limit system ready, continuing...');
-    console.log('🔍 Final initialCheckComplete status:', initialCheckComplete);
+    // Verificar que el sistema de límites esté listo
+    if (!initialCheckComplete) {
+      console.log('❌ EARLY EXIT: Limit system not ready yet');
+      toast({ 
+        title: "Un momento...", 
+        description: "Verificando límites de uso, intenta de nuevo en unos segundos", 
+        variant: "default" 
+      });
+      return;
+    }
+
+    console.log('✅ All systems ready, proceeding with message...');
 
     setIsLoading(true);
     
