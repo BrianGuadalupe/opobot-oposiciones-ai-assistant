@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,6 +19,7 @@ interface LimitCheckResult {
 }
 
 const CACHE_DURATION = 30000; // 30 segundos
+const SUPABASE_URL = "https://dozaqjmdoblwqnuprxnq.supabase.co";
 
 export const useQueryLimits = () => {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
@@ -37,7 +39,7 @@ export const useQueryLimits = () => {
 
     console.log(`🔄 Calling manage-usage with action: ${action}`);
     
-    const response = await fetch(`${supabase.supabaseUrl}/functions/v1/manage-usage`, {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/manage-usage`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -60,6 +62,8 @@ export const useQueryLimits = () => {
   const checkQueryLimit = async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
     console.log('=== CHECK QUERY LIMIT START ===');
     console.log('🔍 Force refresh:', forceRefresh);
+    console.log('🔍 Initial check complete:', initialCheckComplete);
+    console.log('🔍 Is loading:', isLoading);
     console.log('🔍 User/session present:', !!user, !!session);
 
     if (!user || !session) {
@@ -69,9 +73,7 @@ export const useQueryLimits = () => {
         reason: 'no_auth', 
         message: 'Debes iniciar sesión para usar el chat' 
       };
-      if (!initialCheckComplete) {
-        setInitialCheckComplete(true);
-      }
+      setInitialCheckComplete(true);
       return result;
     }
 
@@ -92,7 +94,7 @@ export const useQueryLimits = () => {
       return lastCheckResult;
     }
 
-    console.log('🔍 Starting fresh limit check...');
+    console.log('🔍 Performing fresh limit check...');
     isChecking = true;
     setIsLoading(true);
     
@@ -133,10 +135,8 @@ export const useQueryLimits = () => {
     } finally {
       isChecking = false;
       setIsLoading(false);
-      
-      if (!initialCheckComplete) {
-        setInitialCheckComplete(true);
-      }
+      setInitialCheckComplete(true);
+      console.log('✅ initialCheckComplete set to true');
     }
   };
 
@@ -168,6 +168,37 @@ export const useQueryLimits = () => {
     }
   };
 
+  const waitUntilReady = async (): Promise<void> => {
+    console.log('⏳ waitUntilReady called, initialCheckComplete:', initialCheckComplete);
+    
+    if (initialCheckComplete) {
+      console.log('✅ Already ready, returning immediately');
+      return;
+    }
+
+    console.log('⏳ Waiting for initial check to complete...');
+    
+    return new Promise((resolve) => {
+      const checkReady = () => {
+        console.log('🔍 Checking if ready... initialCheckComplete:', initialCheckComplete);
+        if (initialCheckComplete) {
+          console.log('✅ Ready! Resolving promise');
+          resolve();
+        } else {
+          setTimeout(checkReady, 100);
+        }
+      };
+      
+      // Timeout después de 10 segundos
+      setTimeout(() => {
+        console.log('⚠️ waitUntilReady timeout after 10 seconds');
+        resolve();
+      }, 10000);
+      
+      checkReady();
+    });
+  };
+
   useEffect(() => {
     if (session && user && !initialCheckComplete) {
       console.log('🚀 Initial usage data load triggered...');
@@ -182,5 +213,6 @@ export const useQueryLimits = () => {
     checkQueryLimit,
     logQuery,
     loadUsageData,
+    waitUntilReady,
   };
 };
