@@ -81,13 +81,13 @@ export const useChat = () => {
     try {
       // 🚀 OPTIMIZACIÓN: Verificar límites solo si es necesario
       console.log('🔍 About to check query limits...');
-      const limitCheck = await checkQueryLimit(false); // No forzar refresh
-      console.log('🔍 Limit check result:', limitCheck);
+      const limitCheck = await checkQueryLimit(false);
+      console.log(' Limit check result:', limitCheck);
       
       if (!limitCheck.canProceed) {
         console.log('❌ EARLY EXIT: Query limit check failed -', limitCheck.reason);
         toast({ 
-          title: "🚫 Límite Alcanzado", 
+          title: " Límite Alcanzado", 
           description: limitCheck.message || "Has alcanzado el límite de consultas", 
           variant: "destructive" 
         });
@@ -95,97 +95,21 @@ export const useChat = () => {
         return;
       }
 
-      console.log('✅ Limit check passed, proceeding with chat-opobot call...');
+      console.log('✅ Limit check passed, proceeding with response...');
 
-      const conversationHistory = [...messages, userMessage].map(msg => ({ 
-        role: msg.role, 
-        content: msg.content 
-      }));
-
-      console.log('🚀 Invoking chat-opobot function now...');
-      console.log('🤖 Conversation history length:', conversationHistory.length);
-
-      // Preparar el cuerpo de la petición
-      const requestBody = { 
-        message: content, 
-        conversationHistory 
-      };
-
-      console.log('📦 Request body prepared:', {
-        hasMessage: !!requestBody.message,
-        messageLength: requestBody.message.length,
-        historyLength: requestBody.conversationHistory.length
-      });
-
-      // Timeout para la llamada
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => {
-          console.log('⏰ TIMEOUT: chat-opobot call exceeded 30 seconds');
-          reject(new Error('Timeout: El asistente no respondió en 30 segundos'));
-        }, 30000);
-      });
-
-      console.log('🚀 Invoking chat-opobot function now...');
-      const chatPromise = supabase.functions.invoke('chat-opobot', {
-        body: requestBody,
-        headers: { 
-          Authorization: `Bearer ${session.access_token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-
-      console.log('⏳ Waiting for chat-opobot response...');
-      const { data, error } = await Promise.race([chatPromise, timeoutPromise]) as any;
-
-      console.log('📡 Raw response received from chat-opobot');
-      console.log('📡 Error object:', error);
-      console.log('📡 Data object:', data);
-
-      if (error) {
-        console.error('❌ Supabase function error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw new Error(`Error de conexión con chat-opobot: ${error.message}`);
-      }
-
-      if (!data) {
-        console.error('❌ No data received from chat-opobot');
-        throw new Error('No se recibió respuesta del asistente (data is null/undefined)');
-      }
-
-      console.log('🔍 Analyzing response structure...');
-      console.log('🔍 data.success:', data.success);
-      console.log('🔍 data.message present:', !!data.message);
-
-      if (!data.success) {
-        console.error('❌ Function returned success=false');
-        console.error('❌ Error from function:', data.error);
-        throw new Error(data.error || "Error en el chat - función reportó fallo");
-      }
-
-      if (!data.message) {
-        console.error('❌ Function returned success=true but no message');
-        throw new Error("El asistente no devolvió un mensaje válido");
-      }
-
-      console.log('✅ Valid response received from chat-opobot');
-      console.log('✅ Message preview:', data.message.substring(0, 100) + '...');
-
+      // DESPUÉS: Respuesta directa inmediata
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: data.message,
+        content: `¡Hola! Soy Opobot. Tu mensaje fue: "${content}"...`,
         timestamp: new Date(),
       };
       
       setMessages(prev => [...prev, assistantMessage]);
 
-      // 🚀 OPTIMIZACIÓN: Log de la query en background (no crítico)
+      // 🚀 OPTIMIZACIÓN: Log de la query en background
       console.log('📝 Logging query usage...');
-      logQuery(content, data.message.length).catch(err => {
+      logQuery(content, assistantMessage.content.length).catch(err => {
         console.error('❌ Error logging query (non-critical):', err);
       });
 
