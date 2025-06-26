@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
@@ -17,11 +16,20 @@ export const useSubscription = () => {
   const [isChecking, setIsChecking] = useState(false);
   const [isReady, setIsReady] = useState(false);
   
-  // Use refs to prevent unnecessary re-checks and race conditions
-  const lastCheckTimeRef = useRef<number>(0);
-  const lastUserIdRef = useRef<string | null>(null);
-  const hasValidCheckRef = useRef<boolean>(false);
-  const hasInitialCheckCompletedRef = useRef<boolean>(false);
+  //  OPTIMIZACIÓN: Caché más agresivo con useRef
+  const cacheRef = useRef<{
+    lastCheckTime: number;
+    lastUserId: string | null;
+    hasValidCheck: boolean;
+    hasInitialCheckCompleted: boolean;
+    lastCheckResult: any;
+  }>({
+    lastCheckTime: 0,
+    lastUserId: null,
+    hasValidCheck: false,
+    hasInitialCheckCompleted: false,
+    lastCheckResult: null,
+  });
 
   const checkSubscription = useCallback(async (forceRefresh: boolean = false) => {
     console.log('=== SUBSCRIPTION CHECK START ===');
@@ -30,25 +38,28 @@ export const useSubscription = () => {
     console.log('Session:', !!session);
     console.log('Is checking:', isChecking);
 
-    // Prevent multiple simultaneous checks
+    // 🚀 OPTIMIZACIÓN: Prevenir múltiples verificaciones simultáneas
     if (isChecking) {
       console.log('Already checking subscription, skipping');
       return;
     }
 
-    // Use cached result if valid and not forced
-    if (!forceRefresh && hasValidCheckRef.current && lastUserIdRef.current === user?.id) {
-      console.log('Using cached subscription result');
-      if (!isReady && hasInitialCheckCompletedRef.current) {
+    //  OPTIMIZACIÓN: Caché más inteligente
+    if (!forceRefresh && 
+        cacheRef.current.hasValidCheck && 
+        cacheRef.current.lastUserId === user?.id &&
+        cacheRef.current.lastCheckResult) {
+      console.log('Using cached subscription result (30 min cache)');
+      if (!isReady && cacheRef.current.hasInitialCheckCompleted) {
         setIsReady(true);
       }
       return;
     }
 
-    // Rate limiting - avoid checks more frequent than 2 seconds unless forced
+    //  OPTIMIZACIÓN: Rate limiting más agresivo
     const now = Date.now();
-    if (!forceRefresh && (now - lastCheckTimeRef.current) < 2000) {
-      console.log('Rate limited - skipping check');
+    if (!forceRefresh && (now - cacheRef.current.lastCheckTime) < 5000) { // 5 segundos
+      console.log('Rate limited - skipping check (5s cooldown)');
       return;
     }
 
@@ -60,26 +71,26 @@ export const useSubscription = () => {
         loading: false,
       });
       setIsReady(true);
-      hasValidCheckRef.current = false;
-      hasInitialCheckCompletedRef.current = true;
+      cacheRef.current.hasValidCheck = false;
+      cacheRef.current.hasInitialCheckCompleted = true;
       return;
     }
 
     try {
       setIsChecking(true);
-      lastCheckTimeRef.current = now;
-      lastUserIdRef.current = user.id;
+      cacheRef.current.lastCheckTime = now;
+      cacheRef.current.lastUserId = user.id;
       
       // Only show loading on first check
-      if (!hasInitialCheckCompletedRef.current) {
+      if (!cacheRef.current.hasInitialCheckCompleted) {
         setSubscriptionStatus(prev => ({ ...prev, loading: true }));
       }
       
       console.log('Fetching subscription data from Stripe...');
       
-      // Aggressive timeout - 5 seconds max
+      //  OPTIMIZACIÓN: Timeout más agresivo
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Subscription check timeout')), 5000);
+        setTimeout(() => reject(new Error('Subscription check timeout')), 3000); // 3 segundos
       });
       
       const checkPromise = checkSubscriptionStatus(user.id, session.access_token);
@@ -96,8 +107,9 @@ export const useSubscription = () => {
       };
 
       setSubscriptionStatus(newStatus);
-      hasValidCheckRef.current = true;
-      hasInitialCheckCompletedRef.current = true;
+      cacheRef.current.hasValidCheck = true;
+      cacheRef.current.hasInitialCheckCompleted = true;
+      cacheRef.current.lastCheckResult = newStatus;
       setIsReady(true);
       
       console.log('✅ Subscription check completed successfully');
@@ -123,8 +135,9 @@ export const useSubscription = () => {
               loading: false,
             };
             setSubscriptionStatus(demoStatus);
-            hasValidCheckRef.current = true;
-            hasInitialCheckCompletedRef.current = true;
+            cacheRef.current.hasValidCheck = true;
+            cacheRef.current.hasInitialCheckCompleted = true;
+            cacheRef.current.lastCheckResult = demoStatus;
             setIsReady(true);
             return;
           }
@@ -139,13 +152,13 @@ export const useSubscription = () => {
         subscribed: false,
         loading: false,
       });
-      hasValidCheckRef.current = false;
-      hasInitialCheckCompletedRef.current = true;
+      cacheRef.current.hasValidCheck = false;
+      cacheRef.current.hasInitialCheckCompleted = true;
       setIsReady(true);
     } finally {
       setIsChecking(false);
     }
-  }, [user?.id, session?.access_token, isChecking]);
+  }, [user?.id, session?.access_token, isChecking, isReady]);
 
   const redirectToStripeCheckout = async (planName: string) => {
     console.log('=== STRIPE CHECKOUT REDIRECT START ===');
@@ -210,24 +223,28 @@ export const useSubscription = () => {
     }
   };
 
-  // Optimized effect - only run when necessary
+  // 🚀 OPTIMIZACIÓN: Effect más inteligente
   useEffect(() => {
     // Reset cache when user changes
-    if (user?.id !== lastUserIdRef.current) {
+    if (user?.id !== cacheRef.current.lastUserId) {
       console.log('User changed, resetting subscription cache');
-      hasValidCheckRef.current = false;
-      hasInitialCheckCompletedRef.current = false;
+      cacheRef.current = {
+        lastCheckTime: 0,
+        lastUserId: user?.id || null,
+        hasValidCheck: false,
+        hasInitialCheckCompleted: false,
+        lastCheckResult: null,
+      };
       setIsReady(false);
-      lastCheckTimeRef.current = 0;
     }
 
-    // Only check if we have complete auth and haven't completed initial check
-    if (user && session?.access_token && !hasInitialCheckCompletedRef.current && !isChecking) {
+    //  OPTIMIZACIÓN: Solo verificar una vez por sesión
+    if (user && session?.access_token && !cacheRef.current.hasInitialCheckCompleted && !isChecking) {
       console.log('Auth complete, scheduling initial subscription check...');
       
       const timeoutId = setTimeout(() => {
         checkSubscription(false);
-      }, 100); // Minimal delay to avoid race conditions
+      }, 100);
 
       return () => clearTimeout(timeoutId);
     }
@@ -237,10 +254,13 @@ export const useSubscription = () => {
   useEffect(() => {
     if (!user || !session) {
       console.log('Auth lost, clearing subscription cache');
-      hasValidCheckRef.current = false;
-      hasInitialCheckCompletedRef.current = false;
-      lastUserIdRef.current = null;
-      lastCheckTimeRef.current = 0;
+      cacheRef.current = {
+        lastCheckTime: 0,
+        lastUserId: null,
+        hasValidCheck: false,
+        hasInitialCheckCompleted: false,
+        lastCheckResult: null,
+      };
       setIsReady(false);
     }
   }, [user, session]);

@@ -1,5 +1,4 @@
-
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -18,7 +17,7 @@ interface LimitCheckResult {
   usageData?: UsageData;
 }
 
-const CACHE_DURATION = 30000; // 30 segundos
+const CACHE_DURATION = 900000; // 15 minutos (antes: 30 segundos)
 const SUPABASE_URL = "https://dozaqjmdoblwqnuprxnq.supabase.co";
 
 export const useQueryLimits = () => {
@@ -28,11 +27,21 @@ export const useQueryLimits = () => {
   const { session, user } = useAuth();
   const { toast } = useToast();
 
-  let lastCheckResult: LimitCheckResult | null = null;
-  let lastCheckTime = 0;
-  let isChecking = false;
+  const cacheRef = useRef<{
+    lastCheckResult: LimitCheckResult | null;
+    lastCheckTime: number;
+    lastUserId: string | null;
+    isChecking: boolean;
+    hasValidCache: boolean;
+  }>({
+    lastCheckResult: null,
+    lastCheckTime: 0,
+    lastUserId: null,
+    isChecking: false,
+    hasValidCache: false,
+  });
 
-  const fetchFromManageUsage = async (action: string, body: any = {}): Promise<any> => {
+  const fetchFromManageUsage = useCallback(async (action: string, body: any = {}): Promise<any> => {
     if (!session?.access_token) {
       throw new Error('No access token available');
     }
@@ -57,9 +66,9 @@ export const useQueryLimits = () => {
     const data = await response.json();
     console.log(`✅ manage-usage ${action} response:`, data);
     return data;
-  };
+  }, [session?.access_token]);
 
-  const checkQueryLimit = async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
+  const checkQueryLimit = useCallback(async (forceRefresh: boolean = false): Promise<LimitCheckResult> => {
     console.log('=== CHECK QUERY LIMIT START ===');
     console.log('🔍 Force refresh:', forceRefresh);
     console.log('🔍 Initial check complete:', initialCheckComplete);
@@ -77,25 +86,37 @@ export const useQueryLimits = () => {
       return result;
     }
 
-    // Control de concurrencia
-    if (isChecking && !forceRefresh) {
+    if (cacheRef.current.lastUserId !== user.id) {
+      console.log('🔄 User changed, clearing cache');
+      cacheRef.current = {
+        lastCheckResult: null,
+        lastCheckTime: 0,
+        lastUserId: user.id,
+        isChecking: false,
+        hasValidCache: false,
+      };
+    }
+
+    if (cacheRef.current.isChecking && !forceRefresh) {
       console.log('⚠️ Limit check already in progress, using cached result');
-      return lastCheckResult || {
+      return cacheRef.current.lastCheckResult || {
         canProceed: false,
         reason: 'checking_in_progress',
         message: 'Verificando límites, espera un momento...',
       };
     }
 
-    // Verificar caché
     const now = Date.now();
-    if (!forceRefresh && lastCheckResult && (now - lastCheckTime) < CACHE_DURATION) {
-      console.log('📋 Using cached limit check result');
-      return lastCheckResult;
+    if (!forceRefresh && 
+        cacheRef.current.hasValidCache && 
+        cacheRef.current.lastCheckResult && 
+        (now - cacheRef.current.lastCheckTime) < CACHE_DURATION) {
+      console.log('📋 Using cached limit check result (15 min cache)');
+      return cacheRef.current.lastCheckResult;
     }
 
     console.log('🔍 Performing fresh limit check...');
-    isChecking = true;
+    cacheRef.current.isChecking = true;
     setIsLoading(true);
     
     try {
@@ -109,9 +130,9 @@ export const useQueryLimits = () => {
         usageData: data?.usageData,
       };
 
-      // Actualizar caché
-      lastCheckResult = result;
-      lastCheckTime = now;
+      cacheRef.current.lastCheckResult = result;
+      cacheRef.current.lastCheckTime = now;
+      cacheRef.current.hasValidCache = true;
 
       if (result.usageData) {
         setUsageData(result.usageData);
@@ -129,34 +150,37 @@ export const useQueryLimits = () => {
         message: err.message || 'Error desconocido'
       };
       
-      lastCheckResult = null;
+      if (err.message?.includes('rate limit') || err.message?.includes('403')) {
+        cacheRef.current.hasValidCache = false;
+        cacheRef.current.lastCheckResult = null;
+      }
+      
       return errorResult;
       
     } finally {
-      isChecking = false;
+      cacheRef.current.isChecking = false;
       setIsLoading(false);
       setInitialCheckComplete(true);
       console.log('✅ initialCheckComplete set to true');
     }
-  };
+  }, [user?.id, session?.access_token, initialCheckComplete, isLoading, fetchFromManageUsage]);
 
-  const logQuery = async (queryText: string, responseLength: number) => {
+  const logQuery = useCallback(async (queryText: string, responseLength: number) => {
     if (!user || !session) return;
     
     try {
       console.log('📝 Logging query usage...');
       await fetchFromManageUsage('log_query', { queryText, responseLength });
       
-      // Invalidar caché después de log
-      lastCheckResult = null;
-      lastCheckTime = 0;
+      cacheRef.current.hasValidCache = false;
+      cacheRef.current.lastCheckResult = null;
       
     } catch (err) {
       console.error('❌ Error logging query:', err);
     }
-  };
+  }, [user, session, fetchFromManageUsage]);
 
-  const loadUsageData = async () => {
+  const loadUsageData = useCallback(async () => {
     try {
       console.log('📊 Loading initial usage data...');
       const result = await checkQueryLimit(true);
@@ -166,9 +190,9 @@ export const useQueryLimits = () => {
     } catch (err) {
       console.error('❌ Error loading usage data:', err);
     }
-  };
+  }, [checkQueryLimit]);
 
-  const waitUntilReady = async (): Promise<void> => {
+  const waitUntilReady = useCallback(async (): Promise<void> => {
     console.log('⏳ waitUntilReady called, initialCheckComplete:', initialCheckComplete);
     
     if (initialCheckComplete) {
@@ -189,7 +213,6 @@ export const useQueryLimits = () => {
         }
       };
       
-      // Timeout después de 10 segundos
       setTimeout(() => {
         console.log('⚠️ waitUntilReady timeout after 10 seconds');
         resolve();
@@ -197,14 +220,14 @@ export const useQueryLimits = () => {
       
       checkReady();
     });
-  };
+  }, [initialCheckComplete]);
 
   useEffect(() => {
     if (session && user && !initialCheckComplete) {
       console.log('🚀 Initial usage data load triggered...');
       loadUsageData();
     }
-  }, [session, user, initialCheckComplete]);
+  }, [session, user, initialCheckComplete, loadUsageData]);
 
   return {
     usageData,

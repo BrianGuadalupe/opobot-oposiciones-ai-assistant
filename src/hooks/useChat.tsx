@@ -79,9 +79,9 @@ export const useChat = () => {
     registerQuestion(content);
 
     try {
-      // Verificar límites con refresh forzado para asegurar datos actuales
-      console.log('🔍 About to check query limits with forced refresh...');
-      const limitCheck = await checkQueryLimit(true);
+      // 🚀 OPTIMIZACIÓN: Verificar límites solo si es necesario
+      console.log('🔍 About to check query limits...');
+      const limitCheck = await checkQueryLimit(false); // No forzar refresh
       console.log('🔍 Limit check result:', limitCheck);
       
       if (!limitCheck.canProceed) {
@@ -183,7 +183,7 @@ export const useChat = () => {
       
       setMessages(prev => [...prev, assistantMessage]);
 
-      // Log de la query (en background)
+      // 🚀 OPTIMIZACIÓN: Log de la query en background (no crítico)
       console.log('📝 Logging query usage...');
       logQuery(content, data.message.length).catch(err => {
         console.error('❌ Error logging query (non-critical):', err);
