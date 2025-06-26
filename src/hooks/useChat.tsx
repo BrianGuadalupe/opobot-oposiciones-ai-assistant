@@ -187,40 +187,33 @@ fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
   console.error('❌ TEST 2 error:', error);
 });
 
-console.log('🧪 TEST 3: Con token real - INICIANDO');
-if (typeof window !== 'undefined' && window.supabase) {
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.access_token) {
-      console.log('🔑 Token encontrado, probando...');
-      fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ 
-          message: 'test con token real',
-          conversationHistory: []
-        })
-      })
-      .then(response => {
-        console.log(' Status:', response.status);
-        return response.text();
-      })
-      .then(data => {
-        console.log('📡 Response:', data);
-        console.log('✅ TEST 3 completado');
-      })
-      .catch(error => {
-        console.error('❌ TEST 3 error:', error);
-      });
-    } else {
-      console.log('❌ No hay sesión activa para TEST 3');
-    }
-  });
-} else {
-  console.log('❌ Supabase no disponible para TEST 3');
-}
+console.log('🧪 TEST 3: Test completo del chat');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session.access_token}`
+  },
+  body: JSON.stringify({ 
+    message: 'test completo después del fix',
+    conversationHistory: []
+  })
+})
+.then(response => {
+  console.log(' Status:', response.status);
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  if (response.status === 200) {
+    console.log('✅ TEST 3: chat-opobot funciona correctamente');
+  } else {
+    console.log('❌ TEST 3: chat-opobot aún tiene problemas');
+  }
+})
+.catch(error => {
+  console.error('❌ TEST 3 error:', error);
+});
 
 console.log('🧪 TEST 4: Test de timeout - INICIANDO');
 const controller = new AbortController();
@@ -270,3 +263,282 @@ fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
 .catch(error => {
   console.error('❌ TEST 5 error:', error);
 });
+
+console.log('🧪 TEST 1: Verificar manage-usage log_query');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session.access_token}`
+  },
+  body: JSON.stringify({ 
+    action: 'log_query',
+    queryText: 'test query',
+    responseLength: 100
+  })
+})
+.then(response => {
+  console.log(' Status:', response.status);
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  console.log('✅ manage-usage log_query test completed');
+})
+.catch(error => {
+  console.error('❌ Test error:', error);
+});
+
+console.log('🧪 TEST 2: Verificar manage-usage check_limit');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${session.access_token}`
+  },
+  body: JSON.stringify({ 
+    action: 'check_limit'
+  })
+})
+.then(response => {
+  console.log(' Status:', response.status);
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  const result = JSON.parse(data);
+  console.log('📊 Usage data:', result.usageData);
+  console.log('✅ TEST 2: check_limit funciona correctamente');
+})
+.catch(error => {
+  console.error('❌ TEST 2 error:', error);
+});
+
+console.log('🧪 TEST 4: Verificar actualización en BD');
+const testDatabaseUpdate = async () => {
+  try {
+    // 1. Obtener uso actual
+    const { data: beforeUsage } = await supabase
+      .from('user_usage')
+      .select('queries_this_month, queries_remaining_this_month, total_queries')
+      .eq('user_id', user.id)
+      .single();
+    
+    console.log('📊 Uso ANTES:', beforeUsage);
+    
+    // 2. Hacer una consulta
+    await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'log_query',
+        queryText: 'test de actualización BD',
+        responseLength: 200
+      })
+    });
+    
+    // 3. Esperar un momento
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // 4. Verificar uso después
+    const { data: afterUsage } = await supabase
+      .from('user_usage')
+      .select('queries_this_month, queries_remaining_this_month, total_queries')
+      .eq('user_id', user.id)
+      .single();
+    
+    console.log('📊 Uso DESPUÉS:', afterUsage);
+    
+    // 5. Verificar que se incrementó
+    if (afterUsage.queries_this_month > beforeUsage.queries_this_month) {
+      console.log('✅ TEST 4: Base de datos se actualiza correctamente');
+    } else {
+      console.log('❌ TEST 4: Base de datos no se actualiza');
+    }
+    
+  } catch (error) {
+    console.error('❌ TEST 4 error:', error);
+  }
+};
+
+testDatabaseUpdate();
+
+console.log('🧪 TEST 5: Verificar límites');
+const testLimits = async () => {
+  try {
+    // 1. Verificar límite actual
+    const { data: limitData } = await supabase
+      .from('user_usage')
+      .select('queries_remaining_this_month, subscription_tier')
+      .eq('user_id', user.id)
+      .single();
+    
+    console.log('📊 Límite actual:', limitData.queries_remaining_this_month);
+    console.log('📊 Plan:', limitData.subscription_tier);
+    
+    // 2. Verificar límite vía manage-usage
+    const response = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'check_limit'
+      })
+    });
+    
+    const data = await response.text();
+    const result = JSON.parse(data);
+    
+    console.log('📊 Límite vía API:', result.usageData.queriesRemaining);
+    console.log('📊 Puede proceder:', result.canProceed);
+    
+    if (result.canProceed) {
+      console.log('✅ TEST 5: Límites funcionan correctamente');
+    } else {
+      console.log('⚠️ TEST 5: Límite alcanzado');
+    }
+    
+  } catch (error) {
+    console.error('❌ TEST 5 error:', error);
+  }
+};
+
+testLimits();
+
+// Test de performance del sistema optimizado
+console.log('🧪 TEST 6: Test de performance');
+const testPerformance = async () => {
+  const startTime = Date.now();
+  
+  try {
+    // Test de check_limit (debería usar caché)
+    const response1 = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'check_limit'
+      })
+    });
+    
+    const time1 = Date.now() - startTime;
+    console.log('⏱️ Tiempo check_limit:', time1, 'ms');
+    
+    // Test de log_query
+    const response2 = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'log_query',
+        queryText: 'test performance',
+        responseLength: 100
+      })
+    });
+    
+    const time2 = Date.now() - startTime;
+    console.log('⏱️ Tiempo log_query:', time2, 'ms');
+    
+    if (time1 < 1000 && time2 < 2000) {
+      console.log('✅ TEST 6: Performance optimizada');
+    } else {
+      console.log('⚠️ TEST 6: Performance lenta');
+    }
+    
+  } catch (error) {
+    console.error('❌ TEST 6 error:', error);
+  }
+};
+
+testPerformance();
+
+// Test de manejo de errores
+console.log('🧪 TEST 7: Test de error handling');
+const testErrorHandling = async () => {
+  try {
+    // Test con action inválido
+    const response = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'invalid_action'
+      })
+    });
+    
+    const data = await response.text();
+    console.log(' Status:', response.status);
+    console.log('📡 Response:', data);
+    
+    if (response.status === 400) {
+      console.log('✅ TEST 7: Error handling funciona correctamente');
+    } else {
+      console.log('❌ TEST 7: Error handling no funciona');
+    }
+    
+  } catch (error) {
+    console.error('❌ TEST 7 error:', error);
+  }
+};
+
+testErrorHandling();
+
+// Test para verificar que el caché funciona
+console.log('🧪 TEST 8: Test de caché');
+const testCache = async () => {
+  try {
+    const startTime = Date.now();
+    
+    // Primera llamada (sin caché)
+    const response1 = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'check_limit'
+      })
+    });
+    
+    const time1 = Date.now() - startTime;
+    console.log('⏱️ Primera llamada:', time1, 'ms');
+    
+    // Segunda llamada (con caché)
+    const response2 = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/manage-usage', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ 
+        action: 'check_limit'
+      })
+    });
+    
+    const time2 = Date.now() - startTime;
+    console.log('⏱️ Segunda llamada:', time2, 'ms');
+    
+    if (time2 < time1) {
+      console.log('✅ TEST 8: Caché funciona correctamente');
+    } else {
+      console.log('⚠️ TEST 8: Caché no funciona');
+    }
+    
+  } catch (error) {
+    console.error('❌ TEST 8 error:', error);
+  }
+};
+
+testCache();

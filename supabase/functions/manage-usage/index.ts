@@ -121,12 +121,29 @@ serve(async (req) => {
     if (action === 'log_query') {
       console.log('📝 Logging query for user:', user.id);
       
+      const { data: currentUsage, error: fetchError } = await supabase
+        .from('user_usage')
+        .select('queries_this_month, queries_remaining_this_month, total_queries')
+        .eq('user_id', user.id)
+        .single();
+
+      if (fetchError) {
+        console.error('❌ Error fetching current usage:', fetchError);
+        return new Response(JSON.stringify({ 
+          error: "Error fetching usage data",
+          details: fetchError.message 
+        }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       const { error: updateError } = await supabase
         .from('user_usage')
         .update({
-          queries_this_month: supabase.sql`queries_this_month + 1`,
-          queries_remaining_this_month: supabase.sql`queries_remaining_this_month - 1`,
-          total_queries: supabase.sql`total_queries + 1`,
+          queries_this_month: (currentUsage.queries_this_month || 0) + 1,
+          queries_remaining_this_month: (currentUsage.queries_remaining_this_month || 0) - 1,
+          total_queries: (currentUsage.total_queries || 0) + 1,
           updated_at: new Date().toISOString()
         })
         .eq('user_id', user.id);
