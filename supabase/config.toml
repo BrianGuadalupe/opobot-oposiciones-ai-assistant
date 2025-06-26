@@ -45,7 +45,7 @@ port = 54321
 verify_jwt = false
 
 [functions.chat-opobot]
-verify_jwt = false
+verify_jwt = true
 
 [functions.check-subscription]
 verify_jwt = true
