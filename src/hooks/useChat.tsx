@@ -138,3 +138,135 @@ export const useChat = () => {
     isLoading
   };
 };
+
+console.log('🧪 TEST 1: Conectividad básica - INICIANDO');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ 
+    message: 'test básico',
+    conversationHistory: []
+  })
+})
+.then(response => {
+  console.log(' Status:', response.status);
+  console.log('📡 Headers:', Object.fromEntries(response.headers.entries()));
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  console.log('✅ TEST 1 completado');
+})
+.catch(error => {
+  console.error('❌ TEST 1 error:', error);
+});
+
+console.log('🧪 TEST 2: Con token de prueba - INICIANDO');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer test_token_invalid'
+  },
+  body: JSON.stringify({ 
+    message: 'test con token inválido',
+    conversationHistory: []
+  })
+})
+.then(response => {
+  console.log(' Status:', response.status);
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  console.log('✅ TEST 2 completado');
+})
+.catch(error => {
+  console.error('❌ TEST 2 error:', error);
+});
+
+console.log('🧪 TEST 3: Con token real - INICIANDO');
+if (typeof window !== 'undefined' && window.supabase) {
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    if (session?.access_token) {
+      console.log('🔑 Token encontrado, probando...');
+      fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ 
+          message: 'test con token real',
+          conversationHistory: []
+        })
+      })
+      .then(response => {
+        console.log(' Status:', response.status);
+        return response.text();
+      })
+      .then(data => {
+        console.log('📡 Response:', data);
+        console.log('✅ TEST 3 completado');
+      })
+      .catch(error => {
+        console.error('❌ TEST 3 error:', error);
+      });
+    } else {
+      console.log('❌ No hay sesión activa para TEST 3');
+    }
+  });
+} else {
+  console.log('❌ Supabase no disponible para TEST 3');
+}
+
+console.log('🧪 TEST 4: Test de timeout - INICIANDO');
+const controller = new AbortController();
+const timeoutId = setTimeout(() => {
+  console.log('⏰ Timeout de 10 segundos alcanzado');
+  controller.abort();
+}, 10000);
+
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify({ 
+    message: 'test de timeout',
+    conversationHistory: []
+  }),
+  signal: controller.signal
+})
+.then(response => {
+  clearTimeout(timeoutId);
+  console.log(' Status:', response.status);
+  return response.text();
+})
+.then(data => {
+  console.log('📡 Response:', data);
+  console.log('✅ TEST 4 completado');
+})
+.catch(error => {
+  clearTimeout(timeoutId);
+  if (error.name === 'AbortError') {
+    console.log('⏰ TEST 4: Timeout alcanzado');
+  } else {
+    console.error('❌ TEST 4 error:', error);
+  }
+});
+
+console.log('🧪 TEST 5: Test de CORS - INICIANDO');
+fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+  method: 'OPTIONS'
+})
+.then(response => {
+  console.log('📡 CORS Status:', response.status);
+  console.log('📡 CORS Headers:', Object.fromEntries(response.headers.entries()));
+  console.log('✅ TEST 5 completado');
+})
+.catch(error => {
+  console.error('❌ TEST 5 error:', error);
+});
