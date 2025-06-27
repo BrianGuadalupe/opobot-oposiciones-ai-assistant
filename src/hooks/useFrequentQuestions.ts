@@ -1,6 +1,14 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useState, useEffect } from 'react';
+
+export interface FrequentQuestion {
+  id: string;
+  question: string;
+  context: string | null;
+  times_asked: number;
+  created_at: string;
+}
 
 /**
  * Guarda o actualiza la duda frecuente de un usuario
@@ -9,6 +17,8 @@ import { useAuth } from './useAuth';
  */
 export const useFrequentQuestions = () => {
   const { session } = useAuth();
+  const [recentQuestions, setRecentQuestions] = useState<FrequentQuestion[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const registerQuestion = async (question: string, context?: string) => {
     if (!session) return;
@@ -45,7 +55,46 @@ export const useFrequentQuestions = () => {
         },
       ]);
     }
+
+    // Actualizar la lista de preguntas recientes
+    fetchRecentQuestions();
   };
 
-  return { registerQuestion };
+  const fetchRecentQuestions = async () => {
+    if (!session) return;
+    
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('frequent_questions')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('Error fetching recent questions:', error);
+        return;
+      }
+
+      setRecentQuestions(data || []);
+    } catch (error) {
+      console.error('Error fetching recent questions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchRecentQuestions();
+    }
+  }, [session]);
+
+  return { 
+    registerQuestion, 
+    recentQuestions, 
+    fetchRecentQuestions,
+    isLoading 
+  };
 };
