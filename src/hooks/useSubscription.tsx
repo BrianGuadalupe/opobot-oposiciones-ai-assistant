@@ -204,12 +204,35 @@ export const useSubscription = () => {
 
     try {
       console.log('🔄 Opening customer portal...');
+      console.log('User ID:', user.id);
+      console.log('User email:', user.email);
+      console.log('Access token present:', !!session.access_token);
+      
+      // Verificar que el usuario tenga una suscripción activa
+      if (!subscriptionStatus.subscribed) {
+        toast({
+          title: "Sin suscripción",
+          description: "No tienes una suscripción activa para gestionar",
+          variant: "destructive",
+        });
+        return;
+      }
       
       const url = await openStripeCustomerPortal(session.access_token);
       
       console.log('✅ Customer portal URL received:', url);
       
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Abrir en nueva pestaña
+      const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+      
+      if (!newWindow) {
+        toast({
+          title: "Error",
+          description: "No se pudo abrir el portal. Verifica que no esté bloqueado el popup.",
+          variant: "destructive",
+        });
+        return;
+      }
       
       toast({
         title: "Portal de gestión",
@@ -217,9 +240,25 @@ export const useSubscription = () => {
         variant: "default",
       });
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ Error opening customer portal:', error);
-      handleSecureError(error, 'No se pudo abrir el portal de gestión');
+      
+      // Manejo específico de errores
+      if (error.message?.includes('No Stripe customer found')) {
+        toast({
+          title: "Error",
+          description: "No se encontró tu cuenta de cliente. Contacta soporte.",
+          variant: "destructive",
+        });
+      } else if (error.message?.includes('authentication') || error.message?.includes('unauthorized')) {
+        toast({
+          title: "Error de autenticación",
+          description: "Tu sesión ha expirado. Inicia sesión nuevamente.",
+          variant: "destructive",
+        });
+      } else {
+        handleSecureError(error, 'No se pudo abrir el portal de gestión');
+      }
     }
   };
 

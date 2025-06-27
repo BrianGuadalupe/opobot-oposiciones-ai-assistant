@@ -1,6 +1,6 @@
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface FrequentQuestion {
   id: string;
@@ -24,6 +24,8 @@ export const useFrequentQuestions = () => {
     if (!session) return;
     const userId = session.user.id;
 
+    console.log('📝 Registering question:', question.substring(0, 50) + '...');
+
     // Buscar si ya existe esa pregunta/contexto para el usuario
     const { data: existing, error: findError } = await supabase
       .from('frequent_questions')
@@ -40,13 +42,19 @@ export const useFrequentQuestions = () => {
 
     if (existing) {
       // Ya existe: incrementar contador
-      await supabase
+      const { error: updateError } = await supabase
         .from('frequent_questions')
         .update({ times_asked: (existing.times_asked ?? 1) + 1 })
         .eq('id', existing.id);
+
+      if (updateError) {
+        console.error('Error actualizando duda frecuente:', updateError);
+      } else {
+        console.log('✅ Question count updated');
+      }
     } else {
       // No existe: crearla
-      await supabase.from('frequent_questions').insert([
+      const { error: insertError } = await supabase.from('frequent_questions').insert([
         {
           user_id: userId,
           question,
@@ -54,42 +62,51 @@ export const useFrequentQuestions = () => {
           times_asked: 1,
         },
       ]);
+
+      if (insertError) {
+        console.error('Error creando duda frecuente:', insertError);
+      } else {
+        console.log('✅ New question registered');
+      }
     }
 
     // Actualizar la lista de preguntas recientes
     fetchRecentQuestions();
   };
 
-  const fetchRecentQuestions = async () => {
+  const fetchRecentQuestions = useCallback(async () => {
     if (!session) return;
     
     setIsLoading(true);
     try {
+      console.log('🔄 Fetching recent questions...');
+      
       const { data, error } = await supabase
         .from('frequent_questions')
         .select('*')
         .eq('user_id', session.user.id)
         .order('created_at', { ascending: false })
-        .limit(5);
+        .limit(10);
 
       if (error) {
         console.error('Error fetching recent questions:', error);
         return;
       }
 
+      console.log('✅ Recent questions fetched:', data?.length || 0);
       setRecentQuestions(data || []);
     } catch (error) {
       console.error('Error fetching recent questions:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     if (session) {
       fetchRecentQuestions();
     }
-  }, [session]);
+  }, [session, fetchRecentQuestions]);
 
   return { 
     registerQuestion, 

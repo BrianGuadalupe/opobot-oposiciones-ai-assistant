@@ -12,7 +12,6 @@ import { useNavigate } from 'react-router-dom';
 
 const ChatInterface = () => {
   const [input, setInput] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
   const { messages, sendMessage, clearMessages, isLoading } = useChat();
   const { user } = useAuth();
   const { recentQuestions, fetchRecentQuestions } = useFrequentQuestions();
@@ -26,6 +25,13 @@ const ChatInterface = () => {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Actualizar el historial cuando se envía un mensaje
+  useEffect(() => {
+    if (messages.length > 0) {
+      fetchRecentQuestions();
+    }
+  }, [messages.length, fetchRecentQuestions]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +51,6 @@ const ChatInterface = () => {
 
   const handleQuestionClick = (question: string) => {
     setInput(question);
-    setShowHistory(false);
   };
 
   const formatDate = (dateString: string) => {
@@ -60,7 +65,7 @@ const ChatInterface = () => {
   };
 
   return (
-    <div className="flex flex-col h-screen max-w-4xl mx-auto">
+    <div className="flex flex-col h-screen max-w-6xl mx-auto">
       {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 shadow-sm">
         <div className="flex items-center justify-between">
@@ -85,20 +90,6 @@ const ChatInterface = () => {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              onClick={() => {
-                setShowHistory(!showHistory);
-                if (!showHistory) {
-                  fetchRecentQuestions();
-                }
-              }}
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-2"
-            >
-              <Clock className="w-4 h-4" />
-              Historial
-            </Button>
             <Button
               onClick={clearMessages}
               variant="outline"
@@ -172,45 +163,46 @@ const ChatInterface = () => {
           </div>
         </div>
 
-        {/* History Sidebar */}
-        {showHistory && (
-          <div className="w-80 border-l border-gray-200 bg-gray-50 flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <Clock className="w-4 h-4" />
-                Preguntas Recientes
-              </h3>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {recentQuestions.length === 0 ? (
-                <div className="text-center py-8">
-                  <Clock className="w-8 h-8 mx-auto text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500">
-                    No hay preguntas recientes
-                  </p>
-                </div>
-              ) : (
-                recentQuestions.map((question) => (
-                  <div
-                    key={question.id}
-                    className="bg-white rounded-lg p-3 border border-gray-200 hover:border-opobot-blue cursor-pointer transition-colors"
-                    onClick={() => handleQuestionClick(question.question)}
-                  >
-                    <p className="text-sm text-gray-900 line-clamp-2 mb-2">
-                      {question.question}
-                    </p>
-                    <div className="flex items-center justify-between text-xs text-gray-500">
-                      <span>{formatDate(question.created_at)}</span>
-                      <span className="bg-gray-100 px-2 py-1 rounded">
-                        {question.times_asked} vez{question.times_asked !== 1 ? 'es' : ''}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+        {/* History Sidebar - SIEMPRE VISIBLE */}
+        <div className="w-80 border-l border-gray-200 bg-gray-50 flex flex-col">
+          <div className="p-4 border-b border-gray-200">
+            <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+              <Clock className="w-4 h-4" />
+              Preguntas Recientes
+            </h3>
           </div>
-        )}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {recentQuestions.length === 0 ? (
+              <div className="text-center py-8">
+                <Clock className="w-8 h-8 mx-auto text-gray-400 mb-2" />
+                <p className="text-sm text-gray-500">
+                  No hay preguntas recientes
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Tus preguntas aparecerán aquí
+                </p>
+              </div>
+            ) : (
+              recentQuestions.map((question) => (
+                <div
+                  key={question.id}
+                  className="bg-white rounded-lg p-3 border border-gray-200 hover:border-opobot-blue cursor-pointer transition-colors"
+                  onClick={() => handleQuestionClick(question.question)}
+                >
+                  <p className="text-sm text-gray-900 line-clamp-2 mb-2">
+                    {question.question}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>{formatDate(question.created_at)}</span>
+                    <span className="bg-gray-100 px-2 py-1 rounded">
+                      {question.times_asked} vez{question.times_asked !== 1 ? 'es' : ''}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
