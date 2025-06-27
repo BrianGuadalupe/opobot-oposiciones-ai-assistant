@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { handleSecureError } from '@/utils/securityUtils';
-import { checkSubscriptionStatus, createStripeCheckout, openStripeCustomerPortal } from '@/utils/subscriptionApi';
+import { checkSubscriptionStatus, createStripeCheckout } from '@/utils/subscriptionApi';
 import { supabase } from '@/integrations/supabase/client';
 import type { SubscriptionStatus } from '@/types/subscription';
 import { toast } from '@/hooks/use-toast';
@@ -218,12 +218,34 @@ export const useSubscription = () => {
         return;
       }
       
-      const url = await openStripeCustomerPortal(session.access_token);
+      // 🚀 SOLUCIÓN: Usar fetch directo en lugar de supabase.functions.invoke
+      console.log('🔄 Calling customer-portal with fetch...');
       
-      console.log('✅ Customer portal URL received:', url);
+      const response = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/customer-portal', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Customer portal error:', response.status, errorText);
+        throw new Error(`Error al abrir el portal: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (!data?.url) {
+        console.error('❌ No URL received from customer portal');
+        throw new Error('No se recibió la URL del portal');
+      }
+
+      console.log('✅ Customer portal URL received:', data.url);
       
       // Abrir en nueva pestaña
-      const newWindow = window.open(url, '_blank', 'noopener,noreferrer');
+      const newWindow = window.open(data.url, '_blank', 'noopener,noreferrer');
       
       if (!newWindow) {
         toast({
