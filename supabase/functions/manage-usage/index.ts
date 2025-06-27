@@ -1,3 +1,4 @@
+
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
@@ -138,6 +139,7 @@ serve(async (req) => {
         });
       }
 
+      // Actualizar user_usage - el trigger calculará automáticamente el porcentaje
       const { error: updateError } = await supabase
         .from('user_usage')
         .update({
