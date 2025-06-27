@@ -12,29 +12,14 @@ export const useDemoRegistration = () => {
     if (!session) return { canRegister: false, reason: 'no_auth' };
 
     try {
-      // 🚀 SOLUCIÓN: Manejar el error CSP de manera elegante
-      let userIp = '127.0.0.1'; // IP por defecto
-      
-      try {
-        // Intentar obtener IP, pero no fallar si hay error CSP
-        const ipResponse = await fetch('https://api.ipify.org?format=json', {
-          // Añadir timeout para evitar que se cuelgue
-          signal: AbortSignal.timeout(3000)
-        });
-        
-        if (ipResponse.ok) {
-          const { ip } = await ipResponse.json();
-          userIp = ip;
-        }
-      } catch (ipError) {
-        console.log('⚠️ No se pudo obtener IP (CSP o timeout), usando IP por defecto');
-        // Continuar con IP por defecto
-      }
+      // Obtener IP del usuario
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const { ip } = await ipResponse.json();
 
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
           action: 'check_demo_availability',
-          userIp: userIp 
+          userIp: ip 
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -91,29 +76,14 @@ export const useDemoRegistration = () => {
         return false;
       }
 
-      // 🚀 SOLUCIÓN: Manejar el error CSP de manera elegante
-      let userIp = '127.0.0.1'; // IP por defecto
-      
-      try {
-        // Intentar obtener IP, pero no fallar si hay error CSP
-        const ipResponse = await fetch('https://api.ipify.org?format=json', {
-          // Añadir timeout para evitar que se cuelgue
-          signal: AbortSignal.timeout(3000)
-        });
-        
-        if (ipResponse.ok) {
-          const { ip } = await ipResponse.json();
-          userIp = ip;
-        }
-      } catch (ipError) {
-        console.log('⚠️ No se pudo obtener IP (CSP o timeout), usando IP por defecto');
-        // Continuar con IP por defecto
-      }
+      // Obtener IP del usuario
+      const ipResponse = await fetch('https://api.ipify.org?format=json');
+      const { ip } = await ipResponse.json();
 
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
           action: 'register_demo',
-          userIp: userIp 
+          userIp: ip 
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
