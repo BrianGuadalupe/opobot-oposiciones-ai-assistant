@@ -432,6 +432,24 @@ serve(async (req) => {
     console.log('Caché de límites:', '15 minutos');
     console.log('Caché de suscripción:', '30 minutos');
     
+    // Verificar datos en la base de datos
+    console.log('🧪 TEST BASE DE DATOS: Verificar uso real');
+
+    supabaseClient.from('user_usage')
+    .select('queries_this_month, queries_remaining_this_month, total_queries, usage_percentage')
+    .eq('user_id', user.id)
+    .single()
+    .then(result => {
+      console.log('Datos reales en BD:', result.data);
+      console.log('Consultas este mes:', result.data?.queries_this_month);
+      console.log('Consultas restantes:', result.data?.queries_remaining_this_month);
+      console.log('Total consultas:', result.data?.total_queries);
+      console.log('Porcentaje usado:', result.data?.usage_percentage + '%');
+    })
+    .catch(error => {
+      console.error('❌ Error BD:', error);
+    });
+    
     return new Response(JSON.stringify(finalSubscriptionData), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
