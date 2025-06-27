@@ -12,14 +12,9 @@ export const useDemoRegistration = () => {
     if (!session) return { canRegister: false, reason: 'no_auth' };
 
     try {
-      // Obtener IP del usuario
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const { ip } = await ipResponse.json();
-
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
-          action: 'check_demo_availability',
-          userIp: ip 
+          action: 'check_demo_availability'
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
@@ -48,7 +43,6 @@ export const useDemoRegistration = () => {
     setIsLoading(true);
 
     try {
-      // Verificar disponibilidad primero
       const availability = await checkDemoAvailability();
       
       if (!availability.canRegister) {
@@ -76,14 +70,9 @@ export const useDemoRegistration = () => {
         return false;
       }
 
-      // Obtener IP del usuario
-      const ipResponse = await fetch('https://api.ipify.org?format=json');
-      const { ip } = await ipResponse.json();
-
       const { data, error } = await supabase.functions.invoke('manage-usage', {
         body: { 
-          action: 'register_demo',
-          userIp: ip 
+          action: 'register_demo'
         },
         headers: {
           Authorization: `Bearer ${session.access_token}`,
