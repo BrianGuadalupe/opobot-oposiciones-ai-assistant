@@ -95,13 +95,39 @@ export const useChat = () => {
         return;
       }
 
-      console.log('✅ Limit check passed, proceeding with response...');
+      console.log('✅ Limit check passed, calling OpenAI API...');
 
-      // DESPUÉS: Respuesta directa inmediata
+      // Preparar historial de conversación para OpenAI
+      const conversationHistory = messages.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }));
+
+      // Llamar a la Edge Function chat-opobot
+      const { data, error } = await supabase.functions.invoke('chat-opobot', {
+        body: {
+          message: content,
+          conversationHistory: conversationHistory
+        }
+      });
+
+      if (error) {
+        console.error('❌ Error calling chat-opobot:', error);
+        throw new Error(error.message || 'Error al procesar tu mensaje');
+      }
+
+      if (!data?.success) {
+        console.error('❌ Chat API returned error:', data?.error);
+        throw new Error(data?.error || 'Error al procesar tu mensaje');
+      }
+
+      console.log('✅ OpenAI response received:', data.message.substring(0, 100) + '...');
+
+      // Crear mensaje del asistente con la respuesta real de OpenAI
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `¡Hola! Soy Opobot. Tu mensaje fue: "${content}"...`,
+        content: data.message,
         timestamp: new Date(),
       };
       
