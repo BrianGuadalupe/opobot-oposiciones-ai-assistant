@@ -97,25 +97,26 @@ export const useChat = () => {
 
       console.log('✅ Limit check passed, calling OpenAI API...');
 
-      // Preparar historial de conversación para OpenAI
-      const conversationHistory = messages.map(msg => ({
-        role: msg.role,
-        content: msg.content
-      }));
-
-      // Llamar a la Edge Function chat-opobot
-      const { data, error } = await supabase.functions.invoke('chat-opobot', {
-        body: {
-          message: content,
-          conversationHistory: conversationHistory
-        }
+      // Llamar directamente a la Edge Function usando fetch
+      const response = await fetch('https://dozaqjmdoblwqnuprxnq.supabase.co/functions/v1/chat-opobot', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          message: content
+        })
       });
 
-      if (error) {
-        console.error('❌ Error calling chat-opobot:', error);
-        throw new Error(error.message || 'Error al procesar tu mensaje');
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ Error calling chat-opobot:', response.status, errorText);
+        throw new Error(`Error al procesar tu mensaje: ${response.status}`);
       }
 
+      const data = await response.json();
+      
       if (!data?.success) {
         console.error('❌ Chat API returned error:', data?.error);
         throw new Error(data?.error || 'Error al procesar tu mensaje');
