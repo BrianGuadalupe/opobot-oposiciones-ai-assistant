@@ -88,9 +88,9 @@ export const useSubscription = () => {
       
       console.log('Fetching subscription data from Stripe...');
       
-      //  OPTIMIZACIÓN: Timeout más agresivo
+      //  OPTIMIZACIÓN: Timeout más generoso
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Subscription check timeout')), 3000); // 3 segundos
+        setTimeout(() => reject(new Error('Subscription check timeout')), 15000); // 15 segundos
       });
       
       const checkPromise = checkSubscriptionStatus(user.id, session.access_token);

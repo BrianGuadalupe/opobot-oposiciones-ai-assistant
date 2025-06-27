@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { handleSecureError } from '@/utils/securityUtils';
 import { toast } from '@/hooks/use-toast';
@@ -77,9 +76,9 @@ export const checkSubscriptionStatus = async (
       }
     });
     
-    // Crear Promise con timeout manual
+    // Crear Promise con timeout manual más generoso
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Subscription check timeout')), 7000);
+      setTimeout(() => reject(new Error('Subscription check timeout')), 15000); // 15 segundos
     });
 
     const subscriptionPromise = supabase.functions.invoke('check-subscription', {
