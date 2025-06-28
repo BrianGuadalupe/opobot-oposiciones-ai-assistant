@@ -21,7 +21,7 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [mode, setMode] = useState(searchParams.get('mode') || 'login');
+  const [mode, setMode] = useState(isDemo ? 'signup' : (searchParams.get('mode') || 'login'));
   const isDemo = searchParams.get('demo') === 'true';
   
   const { user } = useAuth();
