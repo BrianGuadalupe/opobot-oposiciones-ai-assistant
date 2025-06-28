@@ -6,6 +6,10 @@ import { useFrequentQuestions } from './useFrequentQuestions';
 import { useQueryLimits } from './useQueryLimits';
 import { useSubscription } from './useSubscription';
 import { useDemoRegistration } from './useDemoRegistration';
+import { Eye, EyeOff, CheckCircle } from "lucide-react";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 export interface ChatMessage {
   id: string;
@@ -17,12 +21,13 @@ export interface ChatMessage {
 export const useChat = () => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const { session, user } = useAuth();
+  const { session, user, signUp, signIn } = useAuth();
   const { toast } = useToast();
   const { registerQuestion } = useFrequentQuestions();
   const { checkQueryLimit, logQuery, initialCheckComplete } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
   const { showSubscriptionModal } = useDemoRegistration();
+  const navigate = useNavigate();
 
   const sendMessage = async (content: string) => {
     console.log('=== SEND MESSAGE START ===');
@@ -161,6 +166,38 @@ export const useChat = () => {
       console.log('🏁 sendMessage completed (success or error)');
     }
   };
+
+  // 🚀 CAMBIO MÍNIMO: Mostrar pantalla especial si ya está autenticado
+  if (user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-600" />
+            </div>
+            <CardTitle className="text-2xl font-bold text-green-600">
+              ¡Ya estás autenticado!
+            </CardTitle>
+            <CardDescription>
+              {isDemo ? "Activando tu demo gratuito..." : "Redirigiendo a tu cuenta..."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <p className="text-gray-600 mb-4">Hola <strong>{user.email}</strong></p>
+            {isDemo && (
+              <Button onClick={handleDemoActivation} className="w-full bg-opobot-blue hover:bg-opobot-blue-dark">
+                Activar Demo
+              </Button>
+            )}
+            <Button onClick={() => navigate('/')} variant="outline" className="w-full mt-2">
+              Ir al Inicio
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return {
     messages,
