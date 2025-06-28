@@ -30,6 +30,61 @@ export const useDemoRegistration = () => {
     }
   };
 
+  const checkDemoStatus = async () => {
+    if (!session) return { status: 'no_auth' };
+
+    try {
+      // Verificar estado de uso actual
+      const { data, error } = await supabase.functions.invoke('manage-usage', {
+        body: { 
+          action: 'check_limit'
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+
+      // Determinar estado del demo
+      if (data.usageData?.monthlyLimit === 3 && data.usageData?.queriesRemaining === 0) {
+        return { status: 'demo_exhausted' };
+      } else if (data.usageData?.monthlyLimit === 3 && data.usageData?.queriesRemaining > 0) {
+        return { status: 'demo_active', remaining: data.usageData.queriesRemaining };
+      } else {
+        return { status: 'no_demo' };
+      }
+    } catch (error) {
+      console.error('Error checking demo status:', error);
+      return { status: 'error' };
+    }
+  };
+
+  const showSubscriptionModal = () => {
+    toast({
+      title: "Demo Completado",
+      description: "Has agotado tus 3 consultas gratuitas. ¡Suscríbete para acceso ilimitado a Opobot!",
+      variant: "default",
+      action: (
+        <div className="flex gap-2 mt-2">
+          <button 
+            onClick={() => window.location.href = '/#pricing'}
+            className="bg-opobot-blue text-white px-4 py-2 rounded-lg text-sm hover:bg-opobot-blue-dark transition-colors"
+          >
+            Ver Planes
+          </button>
+          <button 
+            onClick={() => window.open('https://opobots.com/chat', '_blank')}
+            className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm hover:bg-gray-300 transition-colors"
+          >
+            Ir al Chat
+          </button>
+        </div>
+      ),
+      duration: 10000, // 10 segundos para dar tiempo a leer
+    });
+  };
+
   const registerDemo = async () => {
     if (!session) {
       toast({
@@ -43,6 +98,7 @@ export const useDemoRegistration = () => {
     setIsLoading(true);
 
     try {
+      // Verificar disponibilidad primero
       const availability = await checkDemoAvailability();
       
       if (!availability.canRegister) {
@@ -104,6 +160,8 @@ export const useDemoRegistration = () => {
   return {
     registerDemo,
     checkDemoAvailability,
+    checkDemoStatus,
+    showSubscriptionModal,
     isLoading
   };
 };

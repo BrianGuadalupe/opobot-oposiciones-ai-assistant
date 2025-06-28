@@ -5,6 +5,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useFrequentQuestions } from './useFrequentQuestions';
 import { useQueryLimits } from './useQueryLimits';
 import { useSubscription } from './useSubscription';
+import { useDemoRegistration } from './useDemoRegistration';
 
 export interface ChatMessage {
   id: string;
@@ -21,6 +22,7 @@ export const useChat = () => {
   const { registerQuestion } = useFrequentQuestions();
   const { checkQueryLimit, logQuery, initialCheckComplete } = useQueryLimits();
   const { isReady: subscriptionReady } = useSubscription();
+  const { showSubscriptionModal } = useDemoRegistration();
 
   const sendMessage = async (content: string) => {
     console.log('=== SEND MESSAGE START ===');
@@ -79,18 +81,20 @@ export const useChat = () => {
     registerQuestion(content);
 
     try {
-      // 🚀 OPTIMIZACIÓN: Verificar límites solo si es necesario
-      console.log('🔍 About to check query limits...');
+      // Verificar límites
       const limitCheck = await checkQueryLimit(false);
-      console.log(' Limit check result:', limitCheck);
       
       if (!limitCheck.canProceed) {
-        console.log('❌ EARLY EXIT: Query limit check failed -', limitCheck.reason);
-        toast({ 
-          title: " Límite Alcanzado", 
-          description: limitCheck.message || "Has alcanzado el límite de consultas", 
-          variant: "destructive" 
-        });
+        // Verificar si es demo agotado
+        if (limitCheck.usageData?.monthlyLimit === 3 && limitCheck.usageData?.queriesRemaining === 0) {
+          showSubscriptionModal();
+        } else {
+          toast({ 
+            title: "Límite Alcanzado", 
+            description: limitCheck.message || "Has alcanzado el límite de consultas", 
+            variant: "destructive" 
+          });
+        }
         setMessages(prev => prev.slice(0, -1));
         return;
       }

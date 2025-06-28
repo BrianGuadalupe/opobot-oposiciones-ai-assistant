@@ -1,14 +1,39 @@
-
 import { Button } from "@/components/ui/button";
-import { CheckCircle, Bot } from "lucide-react";
+import { CheckCircle, Bot, AlertCircle } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useDemoRegistration } from "@/hooks/useDemoRegistration";
 import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 
 const Hero = () => {
   const { user } = useAuth();
-  const { registerDemo, isLoading } = useDemoRegistration();
+  const { registerDemo, checkDemoStatus, showSubscriptionModal, isLoading } = useDemoRegistration();
   const navigate = useNavigate();
+  const [demoStatus, setDemoStatus] = useState<'checking' | 'no_demo' | 'demo_active' | 'demo_exhausted'>('checking');
+  const [remainingQueries, setRemainingQueries] = useState(0);
+
+  // Verificar estado del demo cuando el usuario cambia
+  useEffect(() => {
+    const checkStatus = async () => {
+      if (!user) {
+        setDemoStatus('no_demo');
+        return;
+      }
+
+      try {
+        const status = await checkDemoStatus();
+        setDemoStatus(status.status);
+        if (status.status === 'demo_active' && status.remaining) {
+          setRemainingQueries(status.remaining);
+        }
+      } catch (error) {
+        console.error('Error checking demo status:', error);
+        setDemoStatus('no_demo'); // Fallback
+      }
+    };
+
+    checkStatus();
+  }, [user, checkDemoStatus]);
 
   const handleDemoClick = async () => {
     if (!user) {
@@ -17,11 +42,48 @@ const Hero = () => {
       return;
     }
 
-    // Si ya está logueado, registrar demo
-    const success = await registerDemo();
-    if (success) {
-      navigate('/chat');
+    if (demoStatus === 'demo_exhausted') {
+      // Mostrar modal de suscripción
+      showSubscriptionModal();
+      return;
     }
+
+    if (demoStatus === 'demo_active') {
+      // Si tiene demo activo, ir al chat directamente
+      navigate('/chat');
+      return;
+    }
+
+    if (demoStatus === 'no_demo') {
+      // Si no tiene demo, intentar activarlo
+      const success = await registerDemo();
+      if (success) {
+        navigate('/chat');
+      }
+      return;
+    }
+  };
+
+  const getDemoButtonText = () => {
+    if (isLoading) return "Activando...";
+    if (demoStatus === 'checking') return "Verificando...";
+    if (demoStatus === 'demo_exhausted') return "Demo Agotado";
+    if (demoStatus === 'demo_active') {
+      return remainingQueries > 0 ? `Chat (${remainingQueries} restantes)` : "Ir al Chat";
+    }
+    return "Ver Demo";
+  };
+
+  const getDemoButtonVariant = () => {
+    if (demoStatus === 'demo_exhausted') return "destructive";
+    if (demoStatus === 'demo_active') return "default";
+    return "outline";
+  };
+
+  const getDemoButtonIcon = () => {
+    if (demoStatus === 'demo_exhausted') return <AlertCircle className="w-5 h-5" />;
+    if (demoStatus === 'demo_active') return <Bot className="w-5 h-5" />;
+    return <Bot className="w-5 h-5" />;
   };
 
   return (
@@ -55,15 +117,30 @@ const Hero = () => {
               Regístrate Gratis
             </Button>
             <Button 
-              variant="outline" 
+              variant={getDemoButtonVariant()}
               size="lg"
-              className="text-lg px-8 py-4 border-2 rounded-xl border-opobot-blue hover:border-opobot-green transition-shadow hover:shadow"
+              className={`text-lg px-8 py-4 border-2 rounded-xl transition-shadow hover:shadow flex items-center gap-2 ${
+                demoStatus === 'demo_exhausted' 
+                  ? 'border-red-500 hover:border-red-600 bg-red-500 hover:bg-red-600 text-white' 
+                  : 'border-opobot-blue hover:border-opobot-green'
+              }`}
               onClick={handleDemoClick}
-              disabled={isLoading}
+              disabled={isLoading || demoStatus === 'checking'}
             >
-              {isLoading ? "Activando..." : "Ver Demo"}
+              {getDemoButtonIcon()}
+              {getDemoButtonText()}
             </Button>
           </div>
+
+          {/* Mensaje informativo para demo agotado */}
+          {demoStatus === 'demo_exhausted' && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md mx-auto">
+              <p className="text-red-700 text-sm">
+                <AlertCircle className="w-4 h-4 inline mr-2" />
+                Has agotado tu demo gratuito. ¡Suscríbete para acceso ilimitado!
+              </p>
+            </div>
+          )}
 
           {/* Confianza y beneficios */}
           <div className="flex flex-wrap justify-center gap-4 mb-6 text-sm text-gray-600">
