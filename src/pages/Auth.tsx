@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Eye, EyeOff } from "lucide-react";
 import { useDemoRegistration } from "@/hooks/useDemoRegistration";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
@@ -31,7 +32,6 @@ const Auth = () => {
   useEffect(() => {
     if (user) {
       if (isDemo) {
-        // Si es demo y ya está logueado, activar demo directamente
         handleDemoActivation();
       } else {
         navigate("/");
@@ -45,6 +45,60 @@ const Auth = () => {
       navigate('/chat');
     }
   };
+
+  const confirmDemoActivation = () => {
+    return new Promise((resolve) => {
+      // Mostrar modal de confirmación
+      setShowDemoConfirmModal(true);
+      // Resolver cuando el usuario confirme
+    });
+  };
+
+  const showDemoProgress = (remaining: number) => {
+    toast({
+      title: `📊 Demo: ${remaining}/3 consultas restantes`,
+      description: remaining === 1 ? "¡Última consulta! Considera suscribirte." : "",
+      variant: remaining === 1 ? "destructive" : "default",
+    });
+  };
+
+  const showUpgradeSuggestion = (remaining: number) => {
+    if (remaining <= 2) {
+      toast({
+        title: "⚡ ¿Te gusta Opobot?",
+        description: `Te quedan ${remaining} consultas. ¡Suscríbete para acceso ilimitado!`,
+        action: (
+          <Button onClick={() => navigate('/#pricing')} size="sm">
+            Ver Planes
+          </Button>
+        ),
+        duration: 8000,
+      });
+    }
+  };
+
+  const showDemoFeedbackModal = () => (
+    <Dialog>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>📝 ¿Cómo fue tu experiencia?</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleFeedback('positive')}>
+              👍 Me gustó
+            </Button>
+            <Button variant="outline" onClick={() => handleFeedback('negative')}>
+              👎 No me convenció
+            </Button>
+          </div>
+          <Button onClick={() => navigate('/#pricing')} className="w-full">
+            Ver Planes de Suscripción
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,7 +137,6 @@ const Auth = () => {
         });
 
         if (isDemo) {
-          // Para demo, esperar un momento y luego activar
           setTimeout(async () => {
             await handleDemoActivation();
           }, 2000);
@@ -118,6 +171,29 @@ const Auth = () => {
     }
   };
 
+  const DemoWelcomeModal = () => (
+    <Dialog>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>🎉 ¡Bienvenido a Opobot!</DialogTitle>
+          <DialogDescription>
+            Tienes 3 consultas gratuitas para probar nuestro asistente IA.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-4 rounded-lg">
+            <h4 className="font-semibold">💡 Consejos para aprovechar tu demo:</h4>
+            <ul className="text-sm space-y-1 mt-2">
+              <li>• Haz preguntas específicas sobre tu temario</li>
+              <li>• Pide explicaciones detalladas</li>
+              <li>• Solicita ejemplos prácticos</li>
+            </ul>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
@@ -134,7 +210,6 @@ const Auth = () => {
         </CardHeader>
         <CardContent>
           {isDemo ? (
-            // Formulario simplificado para demo
             <form onSubmit={handleAuth} className="space-y-4">
               <div>
                 <Label htmlFor="email">Correo electrónico</Label>
@@ -216,7 +291,6 @@ const Auth = () => {
               </div>
             </form>
           ) : (
-            // Formulario normal con tabs
             <Tabs value={mode} onValueChange={setMode}>
               <TabsList className="grid w-full grid-cols-2">
                 <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
