@@ -14,6 +14,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 
 const Auth = () => {
   const [searchParams] = useSearchParams();
+  const isDemo = searchParams.get('demo') === 'true';
+  
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,7 +24,6 @@ const Auth = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState(isDemo ? 'signup' : (searchParams.get('mode') || 'login'));
-  const isDemo = searchParams.get('demo') === 'true';
   
   const { user } = useAuth();
   const { toast } = useToast();
